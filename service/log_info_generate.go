@@ -162,7 +162,22 @@ func appendBillingInfo(relayInfo *relaycommon.RelayInfo, other map[string]interf
 	if relayInfo.UserSetting.BillingPreference != "" {
 		other["billing_preference"] = relayInfo.UserSetting.BillingPreference
 	}
-	if relayInfo.BillingSource == "subscription" {
+	if relayInfo.PromotionModelName != "" && relayInfo.PromotionQuotaPreConsumed > 0 {
+		other["promotion_model_name"] = relayInfo.PromotionModelName
+		other["promotion_pre_consumed"] = relayInfo.PromotionQuotaPreConsumed
+		other["promotion_settled"] = relayInfo.PromotionQuotaSettled
+		if relayInfo.PromotionQuotaRefunded > 0 {
+			other["promotion_refunded"] = relayInfo.PromotionQuotaRefunded
+		}
+		grantIDs := make([]int, 0, len(relayInfo.PromotionConsumes))
+		for _, consume := range relayInfo.PromotionConsumes {
+			grantIDs = append(grantIDs, consume.GrantId)
+		}
+		if len(grantIDs) > 0 {
+			other["promotion_grant_ids"] = grantIDs
+		}
+	}
+	if relayInfo.SubscriptionId != 0 {
 		if relayInfo.SubscriptionId != 0 {
 			other["subscription_id"] = relayInfo.SubscriptionId
 		}

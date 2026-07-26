@@ -34,7 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { formatNumber } from '@/lib/format'
+import { formatNumber, formatQuota } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 import {
@@ -217,6 +217,29 @@ export function RechargeFormCard({
       contentClassName='space-y-4 sm:space-y-6'
     >
       {/* Online Topup Section */}
+      {topupInfo?.recharge_promotions?.length ? (
+        <div className='border-y py-3'>
+          {topupInfo.recharge_promotions.map((promotion) => {
+            const tier = [...promotion.tiers]
+              .sort((left, right) => right.min_payment_amount - left.min_payment_amount)
+              .find((item) => topupAmount >= item.min_payment_amount)
+            if (!tier) return null
+            return (
+              <div key={promotion.id} className='text-muted-foreground text-xs'>
+                <span className='text-foreground font-medium'>{promotion.name}</span>
+                {' · '}
+                {t('Recharge {{amount}} to receive {{quota}} for {{model}}', {
+                  amount: tier.min_payment_amount,
+                  quota: formatQuota(tier.quota),
+                  model: tier.model_name,
+                })}
+                {' · '}
+                {t('Valid for {{days}} days', { days: tier.expire_days })}
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
       {hasAnyTopup ? (
         <div className='space-y-4 sm:space-y-6'>
           {hasConfigurableTopup && (

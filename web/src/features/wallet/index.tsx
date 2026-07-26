@@ -24,10 +24,13 @@ import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
 
+import { getRechargePromotionGrants } from './api'
+
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
+import { PromotionQuotaCard } from './components/promotion-quota-card'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
@@ -53,6 +56,7 @@ import type {
   PresetAmount,
   CreemProduct,
   WaffoPayMethod,
+  RechargePromotionGrant,
 } from './types'
 
 interface WalletProps {
@@ -62,6 +66,9 @@ interface WalletProps {
 export function Wallet(props: WalletProps) {
   const { t } = useTranslation()
   const [user, setUser] = useState<UserWalletData | null>(null)
+  const [promotionGrants, setPromotionGrants] = useState<
+    RechargePromotionGrant[]
+  >([])
   const [userLoading, setUserLoading] = useState(true)
   const [topupAmount, setTopupAmount] = useState(0)
   const [selectedPreset, setSelectedPreset] = useState<number | null>(null)
@@ -116,6 +123,10 @@ export function Wallet(props: WalletProps) {
       const response = await getSelf()
       if (response.success && response.data) {
         setUser(response.data as UserWalletData)
+      }
+      const promotionResponse = await getRechargePromotionGrants()
+      if (promotionResponse.success && promotionResponse.data) {
+        setPromotionGrants(promotionResponse.data)
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -289,6 +300,7 @@ export function Wallet(props: WalletProps) {
         <SectionPageLayout.Content>
           <div className='mx-auto flex w-full max-w-7xl flex-col gap-4 sm:gap-5'>
             <WalletStatsCard user={user} loading={userLoading} />
+            <PromotionQuotaCard grants={promotionGrants} loading={userLoading} />
 
             <div
               className={

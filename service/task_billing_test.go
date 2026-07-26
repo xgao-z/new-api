@@ -46,6 +46,8 @@ func TestMain(m *testing.M) {
 		&model.Log{},
 		&model.Channel{},
 		&model.TopUp{},
+		&model.RechargePromotionGrant{},
+		&model.RechargePromotionPreConsumeRecord{},
 		&model.UserSubscription{},
 		&model.SystemTask{},
 		&model.SystemTaskLock{},
@@ -69,6 +71,8 @@ func truncate(t *testing.T) {
 		model.DB.Exec("DELETE FROM logs")
 		model.DB.Exec("DELETE FROM channels")
 		model.DB.Exec("DELETE FROM top_ups")
+		model.DB.Exec("DELETE FROM recharge_promotion_pre_consume_records")
+		model.DB.Exec("DELETE FROM recharge_promotion_grants")
 		model.DB.Exec("DELETE FROM user_subscriptions")
 		model.DB.Exec("DELETE FROM system_task_locks")
 		model.DB.Exec("DELETE FROM system_tasks")
@@ -140,6 +144,37 @@ func makeTask(userId, channelId, quota, tokenId int, billingSource string, subsc
 			},
 		},
 	}
+}
+
+func TestTaskAdjustFundingConsumesPromotionBeforeWallet(t *testing.T) {
+	truncate(t)
+	seedUser(t, 101, 1_000)
+	grant := &model.RechargePromotionGrant{
+		TopUpId:    901,
+		UserId:     101,
+		ModelName:  "test-model",
+		TotalQuota: 50,
+		Status:     model.RechargePromotionGrantStatusActive,
+		IssuedAt:   time.Now().Unix(),
+		ExpiresAt:  time.Now().Add(time.Hour).Unix(),
+	}
+	require.NoError(t, model.DB.Create(grant).Error)
+
+	task := makeTask(101, 0, 0, 0, BillingSourceRechargePromotion, 0)
+	task.PrivateData.PromotionRequestId = "task-promotion-reserve"
+	task.PrivateData.PromotionModelName = "test-model"
+	require.NoError(t, task.Insert())
+
+	require.NoError(t, taskAdjustFunding(task, 80))
+	assert.Equal(t, 50, task.PrivateData.PromotionQuota)
+
+	var user model.User
+	require.NoError(t, model.DB.First(&user, 101).Error)
+	assert.Equal(t, 970, user.Quota)
+
+	var updatedGrant model.RechargePromotionGrant
+	require.NoError(t, model.DB.First(&updatedGrant, grant.Id).Error)
+	assert.Equal(t, int64(50), updatedGrant.UsedQuota)
 }
 
 func TestPriceDataOtherRatiosFilterAndSnapshot(t *testing.T) {

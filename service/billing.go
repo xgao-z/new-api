@@ -11,8 +11,10 @@ import (
 )
 
 const (
-	BillingSourceWallet       = "wallet"
-	BillingSourceSubscription = "subscription"
+	BillingSourceWallet            = "wallet"
+	BillingSourceSubscription      = "subscription"
+	BillingSourceRechargePromotion = "recharge_promotion"
+	BillingSourceMixed             = "mixed"
 )
 
 // PreConsumeBilling 根据用户计费偏好创建 BillingSession 并执行预扣费。
@@ -75,9 +77,10 @@ func SettleBilling(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, actualQuo
 			return err
 		}
 
-		// 发送额度通知（订阅计费使用订阅剩余额度）
+		// A mixed request may still have consumed subscription quota for its
+		// fallback portion, so notifications follow the recorded subscription.
 		if actualQuota != 0 {
-			if relayInfo.BillingSource == BillingSourceSubscription {
+			if relayInfo.SubscriptionId != 0 {
 				checkAndSendSubscriptionQuotaNotify(relayInfo)
 			} else {
 				checkAndSendQuotaNotify(relayInfo, actualQuota-preConsumed, preConsumed)

@@ -16,69 +16,109 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// ---------------------------------------------------------------------------
-// BillingSession — 统一计费会话
-// ---------------------------------------------------------------------------
-
-// BillingSession 封装单次请求的预扣费/结算/退款生命周期。
-// 实现 relaycommon.BillingSettler 接口。
+// BillingSession encapsulates a request's pre-consume, settlement, and refund
+// lifecycle. Promotion quota is always allocated before the selected fallback
+// funding source, while the token quota reserves the entire request total.
 type BillingSession struct {
 	relayInfo        *relaycommon.RelayInfo
 	funding          FundingSource
-	preConsumedQuota int  // 实际预扣额度（信任用户可能为 0）
-	tokenConsumed    int  // 令牌额度实际扣减量
-	extraReserved    int  // 发送前补充预扣的额度（订阅退款时需要单独回滚）
-	trusted          bool // 是否命中信任额度旁路
-	fundingSettled   bool // funding.Settle 已成功，资金来源已提交
-	settled          bool // Settle 全部完成（资金 + 令牌）
-	refunded         bool // Refund 已调用
-	mu               sync.Mutex
+	promotion        *RechargePromotionFunding
+	preConsumedQuota int
+	tokenConsumed    int
+
+	promotionPreConsumed int
+	fallbackPreConsumed  int
+	extraReserved        int
+	trusted              bool
+	fundingSettled       bool
+	settled              bool
+	refunded             bool
+	mu                   sync.Mutex
 }
 
-// Settle 根据实际消耗额度进行结算。
-// 资金来源和令牌额度分两步提交：若资金来源已提交但令牌调整失败，
-// 会标记 fundingSettled 防止 Refund 对已提交的资金来源执行退款。
+// Settle allocates final usage to promotion quota first, then adjusts the
+// fallback balance and token quota by their respective deltas.
 func (s *BillingSession) Settle(actualQuota int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.settled {
 		return nil
 	}
-	delta := actualQuota - s.preConsumedQuota
-	if delta == 0 {
-		s.settled = true
-		return nil
+	if actualQuota < 0 {
+		return fmt.Errorf("actual quota cannot be negative: %d", actualQuota)
 	}
-	// 1) 调整资金来源（仅在尚未提交时执行，防止重复调用）
-	if !s.fundingSettled {
-		if err := s.funding.Settle(delta); err != nil {
+
+	promotionBefore := s.promotionConsumed()
+	if s.promotion != nil && actualQuota > promotionBefore {
+		if _, err := s.promotion.ReserveTarget(actualQuota); err != nil {
 			return err
 		}
-		s.fundingSettled = true
 	}
-	// 2) 调整令牌额度
+
+	promotionTarget := s.promotionConsumed()
+	if promotionTarget > actualQuota {
+		promotionTarget = actualQuota
+	}
+	fallbackTarget := actualQuota - promotionTarget
+	fallbackDelta := fallbackTarget - s.fallbackPreConsumed
+	createdSubscriptionReservation := false
+	if fallbackDelta != 0 {
+		if sub, ok := s.funding.(*SubscriptionFunding); ok && sub.subscriptionId == 0 && fallbackDelta > 0 {
+			if err := s.reserveFallback(fallbackDelta); err != nil {
+				if s.promotion != nil && s.promotionConsumed() > promotionBefore {
+					if rollbackErr := s.promotion.RefundTo(promotionBefore); rollbackErr != nil {
+						common.SysLog("error rolling back promotion settlement reserve: " + rollbackErr.Error())
+					}
+				}
+				return err
+			}
+			createdSubscriptionReservation = true
+		} else if err := s.settleFallback(fallbackDelta); err != nil {
+			if s.promotion != nil && s.promotionConsumed() > promotionBefore {
+				if rollbackErr := s.promotion.RefundTo(promotionBefore); rollbackErr != nil {
+					common.SysLog("error rolling back promotion settlement reserve: " + rollbackErr.Error())
+				}
+			}
+			return err
+		}
+		s.fallbackPreConsumed = fallbackTarget
+		if sub, ok := s.funding.(*SubscriptionFunding); ok && sub.subscriptionId > 0 && !createdSubscriptionReservation {
+			s.relayInfo.SubscriptionPostDelta += int64(fallbackDelta)
+		}
+	}
+
+	if s.promotion != nil && promotionTarget < s.promotionConsumed() {
+		// The fallback has already committed. Do not retry its settlement if the
+		// independent promotion refund fails.
+		s.fundingSettled = true
+		if err := s.promotion.RefundTo(promotionTarget); err != nil {
+			return err
+		}
+	}
+	s.promotionPreConsumed = s.promotionConsumed()
+	s.fundingSettled = true
+
+	quotaDelta := actualQuota - s.preConsumedQuota
 	var tokenErr error
-	if !s.relayInfo.IsPlayground {
-		if delta > 0 {
-			tokenErr = model.DecreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, delta)
+	if !s.relayInfo.IsPlayground && quotaDelta != 0 {
+		if quotaDelta > 0 {
+			tokenErr = model.DecreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, quotaDelta)
 		} else {
-			tokenErr = model.IncreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, -delta)
+			tokenErr = model.IncreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, -quotaDelta)
 		}
 		if tokenErr != nil {
-			// 资金来源已提交，令牌调整失败只能记录日志；标记 settled 防止 Refund 误退资金
 			common.SysLog(fmt.Sprintf("error adjusting token quota after funding settled (userId=%d, tokenId=%d, delta=%d): %s",
-				s.relayInfo.UserId, s.relayInfo.TokenId, delta, tokenErr.Error()))
+				s.relayInfo.UserId, s.relayInfo.TokenId, quotaDelta, tokenErr.Error()))
 		}
 	}
-	// 3) 更新 relayInfo 上的订阅 PostDelta（用于日志）
-	if s.funding.Source() == BillingSourceSubscription {
-		s.relayInfo.SubscriptionPostDelta += int64(delta)
-	}
+
+	s.relayInfo.PromotionQuotaSettled = s.promotionPreConsumed
+	s.syncRelayInfo()
 	s.settled = true
 	return tokenErr
 }
 
-// Refund 退还所有预扣费，幂等安全，异步执行。
+// Refund returns every request reservation. It is idempotent and asynchronous.
 func (s *BillingSession) Refund(c *gin.Context) {
 	s.mu.Lock()
 	if s.settled || s.refunded || !s.needsRefundLocked() {
@@ -86,15 +126,7 @@ func (s *BillingSession) Refund(c *gin.Context) {
 		return
 	}
 	s.refunded = true
-	s.mu.Unlock()
 
-	logger.LogInfo(c, fmt.Sprintf("用户 %d 请求失败, 返还预扣费（token_quota=%s, funding=%s）",
-		s.relayInfo.UserId,
-		logger.FormatQuota(s.tokenConsumed),
-		s.funding.Source(),
-	))
-
-	// 复制需要的值到闭包中
 	tokenId := s.relayInfo.TokenId
 	tokenKey := s.relayInfo.TokenKey
 	isPlayground := s.relayInfo.IsPlayground
@@ -102,9 +134,14 @@ func (s *BillingSession) Refund(c *gin.Context) {
 	extraReserved := s.extraReserved
 	subscriptionId := s.relayInfo.SubscriptionId
 	funding := s.funding
+	promotion := s.promotion
+	promotionConsumed := s.promotionConsumed()
+	s.mu.Unlock()
+
+	logger.LogInfo(c, fmt.Sprintf("用户 %d 请求失败, 返还预扣费（token_quota=%s, funding=%s）",
+		s.relayInfo.UserId, logger.FormatQuota(tokenConsumed), s.billingSource()))
 
 	gopool.Go(func() {
-		// 1) 退还资金来源
 		if err := funding.Refund(); err != nil {
 			common.SysLog("error refunding billing source: " + err.Error())
 		}
@@ -113,7 +150,11 @@ func (s *BillingSession) Refund(c *gin.Context) {
 				common.SysLog("error refunding subscription extra reserved quota: " + err.Error())
 			}
 		}
-		// 2) 退还令牌额度
+		if promotion != nil && promotionConsumed > 0 {
+			if err := promotion.Refund(); err != nil {
+				common.SysLog("error refunding recharge promotion quota: " + err.Error())
+			}
+		}
 		if tokenConsumed > 0 && !isPlayground {
 			if err := model.IncreaseTokenQuota(tokenId, tokenKey, tokenConsumed); err != nil {
 				common.SysLog("error refunding token quota: " + err.Error())
@@ -122,7 +163,6 @@ func (s *BillingSession) Refund(c *gin.Context) {
 	})
 }
 
-// NeedsRefund 返回是否存在需要退还的预扣状态。
 func (s *BillingSession) NeedsRefund() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -131,62 +171,88 @@ func (s *BillingSession) NeedsRefund() bool {
 
 func (s *BillingSession) needsRefundLocked() bool {
 	if s.settled || s.refunded || s.fundingSettled {
-		// fundingSettled 时资金来源已提交结算，不能再退预扣费
 		return false
 	}
-	if s.tokenConsumed > 0 {
+	if s.tokenConsumed > 0 || s.promotionConsumed() > 0 {
 		return true
 	}
-	// 订阅可能在 tokenConsumed=0 时仍预扣了额度
-	if sub, ok := s.funding.(*SubscriptionFunding); ok && sub.preConsumed > 0 {
-		return true
+	switch funding := s.funding.(type) {
+	case *WalletFunding:
+		return funding.consumed > 0
+	case *SubscriptionFunding:
+		return funding.preConsumed > 0
+	default:
+		return false
 	}
-	return false
 }
 
-// GetPreConsumedQuota 返回实际预扣的额度。
 func (s *BillingSession) GetPreConsumedQuota() int {
 	return s.preConsumedQuota
 }
 
+// Reserve raises the total reservation target. Additional promotion quota is
+// consumed first; only the remaining portion is reserved from the fallback.
 func (s *BillingSession) Reserve(targetQuota int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	if s.settled || s.refunded || s.trusted || targetQuota <= s.preConsumedQuota {
 		return nil
 	}
 
-	delta := targetQuota - s.preConsumedQuota
-	if delta <= 0 {
-		return nil
+	promotionBefore := s.promotionConsumed()
+	if s.promotion != nil {
+		if _, err := s.promotion.ReserveTarget(targetQuota); err != nil {
+			return err
+		}
 	}
-
-	if err := s.reserveFunding(delta); err != nil {
+	promotionTarget := s.promotionConsumed()
+	if subscription, ok := s.funding.(*SubscriptionFunding); ok && subscription.subscriptionId > 0 {
+		// The initial subscription reservation is refunded atomically by request
+		// ID. Keep that portion reserved until settlement so a later failed
+		// request cannot refund it twice after promotion coverage increases.
+		maxPromotionTarget := targetQuota - int(subscription.preConsumed)
+		if promotionTarget > maxPromotionTarget {
+			if s.promotion == nil {
+				return types.NewError(fmt.Errorf("promotion funding is missing"), types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+			}
+			if err := s.promotion.RefundTo(maxPromotionTarget); err != nil {
+				return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+			}
+			promotionTarget = s.promotionConsumed()
+		}
+	}
+	fallbackTarget := targetQuota - promotionTarget
+	fallbackDelta := fallbackTarget - s.fallbackPreConsumed
+	if err := s.reserveFallback(fallbackDelta); err != nil {
+		if s.promotion != nil && s.promotionConsumed() > promotionBefore {
+			if rollbackErr := s.promotion.RefundTo(promotionBefore); rollbackErr != nil {
+				common.SysLog("error rolling back promotion reserve: " + rollbackErr.Error())
+			}
+		}
 		return err
 	}
-	if err := s.reserveToken(delta); err != nil {
-		s.rollbackFundingReserve(delta)
+
+	tokenDelta := targetQuota - s.preConsumedQuota
+	if err := s.reserveToken(tokenDelta); err != nil {
+		s.rollbackFallbackReserve(fallbackDelta)
+		if s.promotion != nil && s.promotionConsumed() > promotionBefore {
+			if rollbackErr := s.promotion.RefundTo(promotionBefore); rollbackErr != nil {
+				common.SysLog("error rolling back promotion reserve after token failure: " + rollbackErr.Error())
+			}
+		}
 		return err
 	}
 
-	s.preConsumedQuota += delta
-	s.tokenConsumed += delta
-	s.extraReserved += delta
+	s.preConsumedQuota = targetQuota
+	s.tokenConsumed += tokenDelta
+	s.promotionPreConsumed = promotionTarget
+	s.fallbackPreConsumed = fallbackTarget
 	s.syncRelayInfo()
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// PreConsume — 统一预扣费入口（含信任额度旁路）
-// ---------------------------------------------------------------------------
-
-// preConsume 执行预扣费：信任检查 -> 令牌预扣 -> 资金来源预扣。
-// 任一步骤失败时原子回滚已完成的步骤。
 func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIError {
 	effectiveQuota := quota
-
-	// ---- 信任额度旁路 ----
 	if s.shouldTrust(c) {
 		s.trusted = true
 		effectiveQuota = 0
@@ -195,41 +261,83 @@ func (s *BillingSession) preConsume(c *gin.Context, quota int) *types.NewAPIErro
 		logger.LogInfo(c, fmt.Sprintf("用户 %d 需要预扣费 %s (funding=%s)", s.relayInfo.UserId, logger.FormatQuota(effectiveQuota), s.funding.Source()))
 	}
 
-	// ---- 1) 预扣令牌额度 ----
 	if effectiveQuota > 0 {
 		if err := PreConsumeTokenQuota(s.relayInfo, effectiveQuota); err != nil {
+			if s.promotion != nil && s.promotionConsumed() > 0 {
+				if rollbackErr := s.promotion.Refund(); rollbackErr != nil {
+					common.SysLog("error rolling back recharge promotion quota after token pre-consume failure: " + rollbackErr.Error())
+				}
+			}
 			return types.NewErrorWithStatusCode(err, types.ErrorCodePreConsumeTokenQuotaFailed, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
 		}
 		s.tokenConsumed = effectiveQuota
 	}
 
-	// ---- 2) 预扣资金来源 ----
-	if err := s.funding.PreConsume(effectiveQuota); err != nil {
-		// 预扣费失败，回滚令牌额度
-		if s.tokenConsumed > 0 && !s.relayInfo.IsPlayground {
-			if rollbackErr := model.IncreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, s.tokenConsumed); rollbackErr != nil {
-				common.SysLog(fmt.Sprintf("error rolling back token quota (userId=%d, tokenId=%d, amount=%d, fundingErr=%s): %s",
-					s.relayInfo.UserId, s.relayInfo.TokenId, s.tokenConsumed, err.Error(), rollbackErr.Error()))
+	if s.promotion != nil && effectiveQuota > 0 {
+		if _, err := s.promotion.ReserveTarget(effectiveQuota); err != nil {
+			if s.promotionConsumed() > 0 {
+				if rollbackErr := s.promotion.Refund(); rollbackErr != nil {
+					common.SysLog("error rolling back recharge promotion quota after reservation failure: " + rollbackErr.Error())
+				}
 			}
-			s.tokenConsumed = 0
+			s.rollbackTokenPreConsume()
+			return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 		}
-		// TODO: model 层应定义哨兵错误（如 ErrNoActiveSubscription），用 errors.Is 替代字符串匹配
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "no active subscription") || strings.Contains(errMsg, "subscription quota insufficient") {
-			return types.NewErrorWithStatusCode(fmt.Errorf("订阅额度不足或未配置订阅: %s", errMsg), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	}
+	fallbackQuota := effectiveQuota - s.promotionConsumed()
+	if fallbackQuota < 0 {
+		fallbackQuota = 0
+	}
+	if fallbackQuota > 0 {
+		if err := s.funding.PreConsume(fallbackQuota); err != nil {
+			if s.promotion != nil && s.promotionConsumed() > 0 {
+				if rollbackErr := s.promotion.Refund(); rollbackErr != nil {
+					common.SysLog("error rolling back recharge promotion quota: " + rollbackErr.Error())
+				}
+			}
+			s.rollbackTokenPreConsume()
+			return s.fundingError(err)
 		}
-		return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 	}
 
 	s.preConsumedQuota = effectiveQuota
-
-	// ---- 同步 RelayInfo 兼容字段 ----
+	s.promotionPreConsumed = s.promotionConsumed()
+	s.fallbackPreConsumed = fallbackQuota
 	s.syncRelayInfo()
-
 	return nil
 }
 
-func (s *BillingSession) reserveFunding(delta int) error {
+func (s *BillingSession) rollbackTokenPreConsume() {
+	if s.tokenConsumed > 0 && !s.relayInfo.IsPlayground {
+		if rollbackErr := model.IncreaseTokenQuota(s.relayInfo.TokenId, s.relayInfo.TokenKey, s.tokenConsumed); rollbackErr != nil {
+			common.SysLog(fmt.Sprintf("error rolling back token quota (userId=%d, tokenId=%d, amount=%d): %s", s.relayInfo.UserId, s.relayInfo.TokenId, s.tokenConsumed, rollbackErr.Error()))
+		}
+	}
+	s.tokenConsumed = 0
+}
+
+func (s *BillingSession) fundingError(err error) *types.NewAPIError {
+	errMsg := err.Error()
+	if strings.Contains(errMsg, "no active subscription") || strings.Contains(errMsg, "subscription quota insufficient") {
+		return types.NewErrorWithStatusCode(fmt.Errorf("订阅额度不足或未配置订阅: %s", errMsg), types.ErrorCodeInsufficientUserQuota, http.StatusForbidden, types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+	}
+	return types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+}
+
+func (s *BillingSession) settleFallback(delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	return s.funding.Settle(delta)
+}
+
+func (s *BillingSession) reserveFallback(delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	if delta < 0 {
+		return s.releaseFallbackReserve(-delta)
+	}
 	switch funding := s.funding.(type) {
 	case *WalletFunding:
 		if err := model.DecreaseUserQuota(funding.userId, delta, false); err != nil {
@@ -238,32 +346,74 @@ func (s *BillingSession) reserveFunding(delta int) error {
 		funding.consumed += delta
 		return nil
 	case *SubscriptionFunding:
-		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
-			return types.NewErrorWithStatusCode(
-				fmt.Errorf("订阅额度不足或未配置订阅: %s", err.Error()),
-				types.ErrorCodeInsufficientUserQuota,
-				http.StatusForbidden,
-				types.ErrOptionWithSkipRetry(),
-				types.ErrOptionWithNoRecordErrorLog(),
-			)
+		if funding.subscriptionId == 0 {
+			funding.amount = int64(delta)
+			if err := funding.PreConsume(0); err != nil {
+				return s.fundingError(err)
+			}
+			return nil
 		}
+		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, int64(delta)); err != nil {
+			return s.fundingError(err)
+		}
+		s.extraReserved += delta
 		return nil
 	default:
 		return types.NewError(fmt.Errorf("unsupported funding source: %s", s.funding.Source()), types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
 	}
 }
 
-func (s *BillingSession) rollbackFundingReserve(delta int) {
+func (s *BillingSession) releaseFallbackReserve(amount int) error {
+	if amount <= 0 {
+		return nil
+	}
 	switch funding := s.funding.(type) {
 	case *WalletFunding:
-		if err := model.IncreaseUserQuota(funding.userId, delta, false); err != nil {
-			common.SysLog("error rolling back wallet funding reserve: " + err.Error())
-		} else {
-			funding.consumed -= delta
+		if err := model.IncreaseUserQuota(funding.userId, amount, false); err != nil {
+			return err
 		}
+		funding.consumed -= amount
+		if funding.consumed < 0 {
+			funding.consumed = 0
+		}
+		return nil
 	case *SubscriptionFunding:
-		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, -int64(delta)); err != nil {
-			common.SysLog("error rolling back subscription funding reserve: " + err.Error())
+		if funding.subscriptionId == 0 {
+			return nil
+		}
+		if err := model.PostConsumeUserSubscriptionDelta(funding.subscriptionId, -int64(amount)); err != nil {
+			return err
+		}
+		if s.extraReserved >= amount {
+			s.extraReserved -= amount
+		} else {
+			s.relayInfo.SubscriptionPostDelta -= int64(amount - s.extraReserved)
+			s.extraReserved = 0
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported funding source: %s", s.funding.Source())
+	}
+}
+
+func (s *BillingSession) rollbackFallbackReserve(delta int) {
+	if delta > 0 {
+		if err := s.releaseFallbackReserve(delta); err != nil {
+			common.SysLog("error rolling back fallback reserve: " + err.Error())
+		}
+		return
+	}
+	if delta < 0 {
+		if subscription, ok := s.funding.(*SubscriptionFunding); ok && subscription.subscriptionId > 0 {
+			if err := model.PostConsumeUserSubscriptionDelta(subscription.subscriptionId, int64(-delta)); err != nil {
+				common.SysLog("error restoring subscription fallback reserve: " + err.Error())
+			} else {
+				s.relayInfo.SubscriptionPostDelta += int64(-delta)
+			}
+			return
+		}
+		if err := s.reserveFallback(-delta); err != nil {
+			common.SysLog("error restoring fallback reserve: " + err.Error())
 		}
 	}
 }
@@ -278,52 +428,73 @@ func (s *BillingSession) reserveToken(delta int) error {
 	return nil
 }
 
-// shouldTrust 统一信任额度检查，适用于钱包和订阅。
+func (s *BillingSession) promotionConsumed() int {
+	if s.promotion == nil {
+		return 0
+	}
+	return s.promotion.consumed
+}
+
 func (s *BillingSession) shouldTrust(c *gin.Context) bool {
-	// 异步任务（ForcePreConsume=true）必须预扣全额，不允许信任旁路
-	if s.relayInfo.ForcePreConsume {
+	if s.relayInfo.ForcePreConsume || s.promotionConsumed() > 0 {
 		return false
 	}
-
 	trustQuota := common.GetTrustQuota()
 	if trustQuota <= 0 {
 		return false
 	}
-
-	// 检查令牌是否充足
 	tokenTrusted := s.relayInfo.TokenUnlimited
 	if !tokenTrusted {
-		tokenQuota := c.GetInt("token_quota")
-		tokenTrusted = tokenQuota > trustQuota
+		tokenTrusted = c.GetInt("token_quota") > trustQuota
 	}
 	if !tokenTrusted {
 		return false
 	}
+	return s.funding.Source() == BillingSourceWallet && s.relayInfo.UserQuota > trustQuota
+}
 
-	switch s.funding.Source() {
-	case BillingSourceWallet:
-		return s.relayInfo.UserQuota > trustQuota
-	case BillingSourceSubscription:
-		// 订阅不能启用信任旁路。原因：
-		// 1. PreConsumeUserSubscription 要求 amount>0 来创建预扣记录并锁定订阅
-		// 2. SubscriptionFunding.PreConsume 忽略参数，始终用 s.amount 预扣
-		// 3. 若信任旁路将 effectiveQuota 设为 0，会导致 preConsumedQuota 与实际订阅预扣不一致
-		return false
+func (s *BillingSession) billingSource() string {
+	promotion := s.promotionConsumed() > 0
+	fallback := s.fallbackPreConsumed > 0
+	switch {
+	case promotion && fallback:
+		return BillingSourceMixed
+	case promotion:
+		return BillingSourceRechargePromotion
 	default:
-		return false
+		return s.funding.Source()
 	}
 }
 
-// syncRelayInfo 将 BillingSession 的状态同步到 RelayInfo 的兼容字段上。
 func (s *BillingSession) syncRelayInfo() {
 	info := s.relayInfo
 	info.FinalPreConsumedQuota = s.preConsumedQuota
-	info.BillingSource = s.funding.Source()
+	info.BillingSource = s.billingSource()
+	info.PromotionQuotaPreConsumed = s.promotionPreConsumed
+	if s.promotion != nil {
+		info.PromotionModelName = s.promotion.modelName
+		info.PromotionQuotaRefunded = s.promotion.refunded
+		info.PromotionConsumes = make([]relaycommon.PromotionConsumeInfo, 0, len(s.promotion.consumes))
+		for _, consume := range s.promotion.consumes {
+			info.PromotionConsumes = append(info.PromotionConsumes, relaycommon.PromotionConsumeInfo{
+				GrantId:     consume.GrantId,
+				RecordId:    consume.RecordId,
+				PreConsumed: consume.PreConsumed,
+				Refunded:    consume.Refunded,
+				TotalQuota:  consume.TotalQuota,
+				UsedAfter:   consume.UsedAfter,
+				ExpiresAt:   consume.ExpiresAt,
+			})
+		}
+	} else {
+		info.PromotionConsumes = nil
+		info.PromotionQuotaPreConsumed = 0
+		info.PromotionQuotaRefunded = 0
+	}
 
 	if sub, ok := s.funding.(*SubscriptionFunding); ok {
 		info.SubscriptionId = sub.subscriptionId
 		info.SubscriptionPreConsumed = sub.preConsumed + int64(s.extraReserved)
-		info.SubscriptionPostDelta = 0
 		info.SubscriptionAmountTotal = sub.AmountTotal
 		info.SubscriptionAmountUsedAfterPreConsume = sub.AmountUsedAfter + int64(s.extraReserved)
 		info.SubscriptionPlanId = sub.PlanId
@@ -331,45 +502,73 @@ func (s *BillingSession) syncRelayInfo() {
 	} else {
 		info.SubscriptionId = 0
 		info.SubscriptionPreConsumed = 0
+		info.SubscriptionPostDelta = 0
+		info.SubscriptionAmountTotal = 0
+		info.SubscriptionAmountUsedAfterPreConsume = 0
+		info.SubscriptionPlanId = 0
+		info.SubscriptionPlanTitle = ""
 	}
 }
 
-// ---------------------------------------------------------------------------
-// NewBillingSession 工厂 — 根据计费偏好创建会话并处理回退
-// ---------------------------------------------------------------------------
-
-// NewBillingSession 根据用户计费偏好创建 BillingSession，处理 subscription_first / wallet_first 的回退。
+// NewBillingSession reserves matching model-specific promotion quota first and
+// routes only the uncovered amount through the user's existing billing policy.
 func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preConsumedQuota int) (*BillingSession, *types.NewAPIError) {
 	if relayInfo == nil {
 		return nil, types.NewError(fmt.Errorf("relayInfo is nil"), types.ErrorCodeInvalidRequest, types.ErrOptionWithSkipRetry())
 	}
 
+	promotion := &RechargePromotionFunding{
+		requestId: relayInfo.RequestId,
+		userId:    relayInfo.UserId,
+		modelName: relayInfo.PromotionModelName,
+	}
+	if relayInfo.PromotionModelName == "" {
+		promotion = nil
+	}
+	if promotion != nil {
+		if _, err := promotion.ReserveTarget(preConsumedQuota); err != nil {
+			return nil, types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+		}
+	}
+	promotionConsumed := 0
+	if promotion != nil {
+		promotionConsumed = promotion.consumed
+	}
+	fallbackQuota := preConsumedQuota - promotionConsumed
+	if fallbackQuota < 0 {
+		fallbackQuota = 0
+	}
+	cleanupPromotion := func() {
+		if promotion == nil || promotion.consumed == 0 {
+			return
+		}
+		if err := promotion.Refund(); err != nil {
+			common.SysLog("error rolling back recharge promotion reservation: " + err.Error())
+		}
+	}
+
 	pref := common.NormalizeBillingPreference(relayInfo.UserSetting.BillingPreference)
+	newSession := func(funding FundingSource) *BillingSession {
+		return &BillingSession{relayInfo: relayInfo, funding: funding, promotion: promotion}
+	}
 
-	// 钱包路径需要先检查用户额度
 	tryWallet := func() (*BillingSession, *types.NewAPIError) {
-		userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
-		if err != nil {
-			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		if fallbackQuota > 0 {
+			userQuota, err := model.GetUserQuota(relayInfo.UserId, false)
+			if err != nil {
+				cleanupPromotion()
+				return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+			}
+			if userQuota <= 0 || userQuota < fallbackQuota {
+				cleanupPromotion()
+				return nil, types.NewErrorWithStatusCode(
+					fmt.Errorf("预扣费额度失败, 用户剩余额度: %s, 需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(fallbackQuota)),
+					types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
+					types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
+			}
+			relayInfo.UserQuota = userQuota
 		}
-		if userQuota <= 0 {
-			return nil, types.NewErrorWithStatusCode(
-				fmt.Errorf("用户额度不足, 剩余额度: %s", logger.FormatQuota(userQuota)),
-				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
-				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
-		}
-		if userQuota-preConsumedQuota < 0 {
-			return nil, types.NewErrorWithStatusCode(
-				fmt.Errorf("预扣费额度失败, 用户剩余额度: %s, 需要预扣费额度: %s", logger.FormatQuota(userQuota), logger.FormatQuota(preConsumedQuota)),
-				types.ErrorCodeInsufficientUserQuota, http.StatusForbidden,
-				types.ErrOptionWithSkipRetry(), types.ErrOptionWithNoRecordErrorLog())
-		}
-		relayInfo.UserQuota = userQuota
-
-		session := &BillingSession{
-			relayInfo: relayInfo,
-			funding:   &WalletFunding{userId: relayInfo.UserId},
-		}
+		session := newSession(&WalletFunding{userId: relayInfo.UserId})
 		if apiErr := session.preConsume(c, preConsumedQuota); apiErr != nil {
 			return nil, apiErr
 		}
@@ -377,22 +576,13 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	}
 
 	trySubscription := func() (*BillingSession, *types.NewAPIError) {
-		subConsume := int64(preConsumedQuota)
-		if subConsume <= 0 {
-			subConsume = 1
-		}
-		session := &BillingSession{
-			relayInfo: relayInfo,
-			funding: &SubscriptionFunding{
-				requestId: relayInfo.RequestId,
-				userId:    relayInfo.UserId,
-				modelName: relayInfo.OriginModelName,
-				amount:    subConsume,
-			},
-		}
-		// 必须传 subConsume 而非 preConsumedQuota，保证 SubscriptionFunding.amount、
-		// preConsume 参数和 FinalPreConsumedQuota 三者一致，避免订阅多扣费。
-		if apiErr := session.preConsume(c, int(subConsume)); apiErr != nil {
+		session := newSession(&SubscriptionFunding{
+			requestId: relayInfo.RequestId,
+			userId:    relayInfo.UserId,
+			modelName: relayInfo.OriginModelName,
+			amount:    int64(fallbackQuota),
+		})
+		if apiErr := session.preConsume(c, preConsumedQuota); apiErr != nil {
 			return nil, apiErr
 		}
 		return session, nil
@@ -404,39 +594,51 @@ func NewBillingSession(c *gin.Context, relayInfo *relaycommon.RelayInfo, preCons
 	case "wallet_only":
 		return tryWallet()
 	case "wallet_first":
-		session, err := tryWallet()
-		if err != nil {
-			if err.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
+		session, apiErr := tryWallet()
+		if apiErr != nil {
+			if apiErr.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
+				if promotion != nil {
+					if _, err := promotion.ReserveTarget(preConsumedQuota); err != nil {
+						return nil, types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+					}
+					fallbackQuota = preConsumedQuota - promotion.consumed
+				}
 				return trySubscription()
 			}
-			return nil, err
+			return nil, apiErr
 		}
 		return session, nil
 	case "subscription_first":
 		fallthrough
 	default:
-		hasSub, subCheckErr := model.HasActiveUserSubscription(relayInfo.UserId)
-		if subCheckErr != nil {
-			return nil, types.NewError(subCheckErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		hasSub, err := model.HasActiveUserSubscription(relayInfo.UserId)
+		if err != nil {
+			cleanupPromotion()
+			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
 		}
 		if !hasSub {
 			return tryWallet()
 		}
 		session, apiErr := trySubscription()
-		if apiErr != nil {
-			if apiErr.GetErrorCode() == types.ErrorCodeInsufficientUserQuota {
-				// 仅当用户的活跃订阅允许钱包回退时才回退到钱包，否则返回订阅额度不足错误
-				allowOverflow, overflowErr := model.UserActiveSubscriptionsAllowWalletOverflow(relayInfo.UserId)
-				if overflowErr != nil {
-					return nil, types.NewError(overflowErr, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
-				}
-				if allowOverflow {
-					return tryWallet()
-				}
-				return nil, apiErr
-			}
+		if apiErr == nil {
+			return session, nil
+		}
+		if apiErr.GetErrorCode() != types.ErrorCodeInsufficientUserQuota {
 			return nil, apiErr
 		}
-		return session, nil
+		allowOverflow, err := model.UserActiveSubscriptionsAllowWalletOverflow(relayInfo.UserId)
+		if err != nil {
+			return nil, types.NewError(err, types.ErrorCodeQueryDataError, types.ErrOptionWithSkipRetry())
+		}
+		if !allowOverflow {
+			return nil, apiErr
+		}
+		if promotion != nil {
+			if _, err := promotion.ReserveTarget(preConsumedQuota); err != nil {
+				return nil, types.NewError(err, types.ErrorCodeUpdateDataError, types.ErrOptionWithSkipRetry())
+			}
+			fallbackQuota = preConsumedQuota - promotion.consumed
+		}
+		return tryWallet()
 	}
 }
