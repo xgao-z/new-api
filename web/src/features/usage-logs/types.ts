@@ -114,6 +114,8 @@ export interface ToolSurchargeItem {
 
 export interface LogOtherData {
   admin_info?: {
+    // Client User-Agent of the request. Admin-only (nested under admin_info).
+    user_agent?: string
     is_multi_key?: boolean
     multi_key_index?: number
     use_channel?: number[]

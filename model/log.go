@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -279,13 +280,47 @@ func RecordTopupLog(userId int, content string, callerIp string, paymentMethod s
 	}
 }
 
+// maxLogUserAgentLength bounds the recorded User-Agent so a hostile client
+// cannot bloat the log's other column with an arbitrarily long header.
+const maxLogUserAgentLength = 512
+
+// attachUserAgentAdminInfo nests the request's User-Agent under
+// other.admin_info.user_agent so admins can analyze client UAs, while
+// formatUserLogs strips the whole admin_info object for non-admin viewers.
+// Returns the (possibly newly created) map so callers can pass a nil other.
+func attachUserAgentAdminInfo(c *gin.Context, other map[string]interface{}) map[string]interface{} {
+	if c == nil || c.Request == nil {
+		return other
+	}
+	ua := strings.TrimSpace(c.Request.UserAgent())
+	if ua == "" {
+		return other
+	}
+	if len(ua) > maxLogUserAgentLength {
+		ua = ua[:maxLogUserAgentLength]
+		for len(ua) > 0 && !utf8.ValidString(ua) {
+			ua = ua[:len(ua)-1]
+		}
+	}
+	if other == nil {
+		other = make(map[string]interface{})
+	}
+	adminInfo, ok := other["admin_info"].(map[string]interface{})
+	if !ok || adminInfo == nil {
+		adminInfo = map[string]interface{}{}
+		other["admin_info"] = adminInfo
+	}
+	adminInfo["user_agent"] = ua
+	return other
+}
+
 func RecordErrorLog(c *gin.Context, userId int, channelId int, modelName string, tokenName string, content string, tokenId int, useTimeSeconds int,
 	isStream bool, group string, other map[string]interface{}) {
 	logger.LogInfo(c, fmt.Sprintf("record error log: userId=%d, channelId=%d, modelName=%s, tokenName=%s, content=%s", userId, channelId, modelName, tokenName, common.LocalLogPreview(content)))
 	username := c.GetString("username")
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
-	otherStr := common.MapToJsonStr(other)
+	otherStr := common.MapToJsonStr(attachUserAgentAdminInfo(c, other))
 	// 判断是否需要记录 IP
 	needRecordIp := false
 	if settingMap, err := GetUserSetting(userId, false); err == nil {
@@ -349,7 +384,7 @@ func RecordConsumeLog(c *gin.Context, userId int, params RecordConsumeLogParams)
 	requestId := c.GetString(common.RequestIdKey)
 	upstreamRequestId := c.GetString(common.UpstreamRequestIdKey)
 	createdAt := common.GetTimestamp()
-	otherStr := common.MapToJsonStr(params.Other)
+	otherStr := common.MapToJsonStr(attachUserAgentAdminInfo(c, params.Other))
 	// 判断是否需要记录 IP
 	needRecordIp := false
 	if settingMap, err := GetUserSetting(userId, false); err == nil {
