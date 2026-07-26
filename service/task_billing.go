@@ -86,8 +86,80 @@ func taskIsSubscription(task *model.Task) bool {
 	return task.PrivateData.BillingSource == BillingSourceSubscription && task.PrivateData.SubscriptionId > 0
 }
 
-// taskAdjustFunding 调整任务的资金来源（钱包或订阅），delta > 0 表示扣费，delta < 0 表示退还。
+func taskIsRechargePromotion(task *model.Task) bool {
+	return task.PrivateData.PromotionRequestId != "" && task.PrivateData.PromotionQuota > 0
+}
+
+func taskRefundPromotionFunding(task *model.Task, requested int) (int, error) {
+	if !taskIsRechargePromotion(task) || requested <= 0 {
+		return 0, nil
+	}
+	refund := requested
+	if refund > task.PrivateData.PromotionQuota {
+		refund = task.PrivateData.PromotionQuota
+	}
+	if refund == 0 {
+		return 0, nil
+	}
+	if err := model.RefundRechargePromotionPreConsume(task.PrivateData.PromotionRequestId, int64(refund)); err != nil {
+		return 0, err
+	}
+	task.PrivateData.PromotionQuota -= refund
+	if err := task.Update(); err != nil {
+		logger.LogWarn(context.Background(), fmt.Sprintf("更新任务推广额度快照失败 task %s: %s", task.TaskID, err.Error()))
+	}
+	return refund, nil
+}
+
+func taskReservePromotionFunding(task *model.Task, requested int) (int, error) {
+	if task.PrivateData.PromotionRequestId == "" || task.PrivateData.PromotionModelName == "" || requested <= 0 {
+		return 0, nil
+	}
+	target := task.PrivateData.PromotionQuota + requested
+	_, remaining, err := model.PreConsumeRechargePromotion(
+		task.PrivateData.PromotionRequestId,
+		task.UserId,
+		task.PrivateData.PromotionModelName,
+		int64(target),
+	)
+	if err != nil {
+		return 0, err
+	}
+	reserved := target - int(remaining)
+	added := reserved - task.PrivateData.PromotionQuota
+	if added <= 0 {
+		return 0, nil
+	}
+	task.PrivateData.PromotionQuota = reserved
+	if err := task.Update(); err != nil {
+		logger.LogWarn(context.Background(), fmt.Sprintf("更新任务推广额度快照失败 task %s: %s", task.TaskID, err.Error()))
+	}
+	return added, nil
+}
+
+// taskAdjustFunding adjusts a task's fallback source. Promotion quota is
+// consumed first for a positive delta and refunded first for a negative delta.
 func taskAdjustFunding(task *model.Task, delta int) error {
+	if delta > 0 {
+		promotionAdded, err := taskReservePromotionFunding(task, delta)
+		if err != nil {
+			return err
+		}
+		delta -= promotionAdded
+		if delta == 0 {
+			return nil
+		}
+	}
+	if delta < 0 && taskIsRechargePromotion(task) {
+		refunded, err := taskRefundPromotionFunding(task, -delta)
+		if err != nil {
+			return err
+		}
+		delta += refunded
+		if delta == 0 {
+			return nil
+		}
+	}
 	if taskIsSubscription(task) {
 		return model.PostConsumeUserSubscriptionDelta(task.PrivateData.SubscriptionId, int64(delta))
 	}
@@ -169,7 +241,7 @@ func RefundTaskQuota(ctx context.Context, task *model.Task, reason string) bool 
 		return true
 	}
 
-	// 1. 退还资金来源（钱包或订阅）
+	// 1. 退还资金来源（推广额度优先，其余回退到钱包或订阅）
 	if err := taskAdjustFunding(task, -quota); err != nil {
 		logger.LogWarn(ctx, fmt.Sprintf("退还资金来源失败 task %s: %s", task.TaskID, err.Error()))
 		return false

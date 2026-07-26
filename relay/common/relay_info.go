@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/setting/model_setting"
+	"github.com/QuantumNous/new-api/setting/ratio_setting"
 	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
@@ -85,6 +86,16 @@ type TokenCountMeta struct {
 	estimatePromptTokens int
 }
 
+type PromotionConsumeInfo struct {
+	GrantId     int   `json:"grant_id"`
+	RecordId    int   `json:"record_id"`
+	PreConsumed int64 `json:"pre_consumed"`
+	Refunded    int64 `json:"refunded"`
+	TotalQuota  int64 `json:"total_quota"`
+	UsedAfter   int64 `json:"used_after"`
+	ExpiresAt   int64 `json:"expires_at"`
+}
+
 type RelayInfo struct {
 	TokenId           int
 	TokenKey          string
@@ -130,8 +141,21 @@ type RelayInfo struct {
 	// 免费模型时为 nil。
 	Billing BillingSettler
 	// BillingSource indicates whether this request is billed from wallet quota or subscription.
-	// "" or "wallet" => wallet; "subscription" => subscription
+	// "promotion" identifies model-specific recharge promotion quota.
 	BillingSource string
+	// PromotionModelName freezes the normalized client-facing model identifier at
+	// pre-consume time, before any channel-specific mapping can alter it.
+	PromotionModelName string
+	// PromotionConsumes records all model-scoped grant reservations made for the
+	// request. A request may consume more than one grant before wallet/subscription.
+	PromotionConsumes []PromotionConsumeInfo
+	// PromotionQuotaPreConsumed is the total portion reserved from promotion grants.
+	PromotionQuotaPreConsumed int
+	// PromotionQuotaSettled is the final model-promotion spend for this request.
+	PromotionQuotaSettled int
+	// PromotionQuotaRefunded records promotion quota returned after a failed or
+	// overestimated request.
+	PromotionQuotaRefunded int
 	// SubscriptionId is the user_subscriptions.id used when BillingSource == "subscription"
 	SubscriptionId int
 	// SubscriptionPreConsumed is the amount pre-consumed on subscription item (quota units or 1)
@@ -477,7 +501,8 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 		UserQuota:  common.GetContextKeyInt(c, constant.ContextKeyUserQuota),
 		UserEmail:  common.GetContextKeyString(c, constant.ContextKeyUserEmail),
 
-		OriginModelName: common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
+		OriginModelName:    common.GetContextKeyString(c, constant.ContextKeyOriginalModel),
+		PromotionModelName: NormalizePromotionModelName(common.GetContextKeyString(c, constant.ContextKeyOriginalModel)),
 
 		TokenId:        common.GetContextKeyInt(c, constant.ContextKeyTokenId),
 		TokenKey:       common.GetContextKeyString(c, constant.ContextKeyTokenKey),
@@ -518,6 +543,10 @@ func genBaseRelayInfo(c *gin.Context, request dto.Request) *RelayInfo {
 	}
 
 	return info
+}
+
+func NormalizePromotionModelName(modelName string) string {
+	return ratio_setting.FormatMatchingModelName(strings.TrimSpace(modelName))
 }
 
 func cloneRequestHeaders(c *gin.Context) map[string]string {

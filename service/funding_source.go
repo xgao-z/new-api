@@ -63,6 +63,92 @@ func (w *WalletFunding) Refund() error {
 	return model.IncreaseUserQuota(w.userId, w.consumed, false)
 }
 
+type RechargePromotionFunding struct {
+	requestId string
+	userId    int
+	modelName string
+	consumed  int
+	refunded  int
+	consumes  []model.RechargePromotionConsume
+}
+
+func (p *RechargePromotionFunding) Source() string { return BillingSourceRechargePromotion }
+
+// ReserveTarget reserves promotion quota up to the request's target total.
+// The model operation is idempotent for the request ID, so it can safely be
+// called again when settlement exceeds the original pre-consume estimate.
+func (p *RechargePromotionFunding) ReserveTarget(target int) (int, error) {
+	if target <= 0 {
+		return p.consumed, nil
+	}
+	consumes, _, err := model.PreConsumeRechargePromotion(p.requestId, p.userId, p.modelName, int64(target))
+	if err != nil {
+		return p.consumed, err
+	}
+	reserved := int64(0)
+	for _, consume := range consumes {
+		reserved += consume.PreConsumed - consume.Refunded
+	}
+	p.consumed = int(reserved)
+	p.consumes = consumes
+	return p.consumed, nil
+}
+
+func (p *RechargePromotionFunding) PreConsume(amount int) error {
+	_, err := p.ReserveTarget(amount)
+	return err
+}
+
+func (p *RechargePromotionFunding) Settle(delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	if delta > 0 {
+		_, err := p.ReserveTarget(p.consumed + delta)
+		return err
+	}
+	return p.RefundTo(p.consumed + delta)
+}
+
+func (p *RechargePromotionFunding) RefundTo(target int) error {
+	if target < 0 {
+		target = 0
+	}
+	if target >= p.consumed {
+		return nil
+	}
+	refund := p.consumed - target
+	if err := model.RefundRechargePromotionPreConsume(p.requestId, int64(refund)); err != nil {
+		return err
+	}
+	p.consumed = target
+	p.refunded += refund
+	p.applyRefund(refund)
+	return nil
+}
+
+func (p *RechargePromotionFunding) Refund() error {
+	return p.RefundTo(0)
+}
+
+func (p *RechargePromotionFunding) applyRefund(amount int) {
+	remaining := int64(amount)
+	for index := len(p.consumes) - 1; index >= 0 && remaining > 0; index-- {
+		consume := &p.consumes[index]
+		available := consume.PreConsumed - consume.Refunded
+		if available <= 0 {
+			continue
+		}
+		refund := available
+		if refund > remaining {
+			refund = remaining
+		}
+		consume.Refunded += refund
+		consume.UsedAfter -= refund
+		remaining -= refund
+	}
+}
+
 // ---------------------------------------------------------------------------
 // SubscriptionFunding — 订阅资金来源实现
 // ---------------------------------------------------------------------------

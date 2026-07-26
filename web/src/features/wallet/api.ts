@@ -39,6 +39,7 @@ import type {
   WaffoPaymentResponse,
   WaffoPancakePaymentRequest,
   WaffoPancakePaymentResponse,
+  RechargePromotionGrant,
 } from './types'
 
 // ============================================================================
@@ -178,6 +179,16 @@ export async function requestWaffoPancakePayment(
   const res = await api.post('/api/user/waffo-pancake/pay', request, {
     skipBusinessError: true,
   } as Record<string, unknown>)
+  return res.data
+}
+
+/**
+ * Get model-scoped recharge promotion quota balances for the current user.
+ */
+export async function getRechargePromotionGrants(): Promise<
+  ApiResponse<RechargePromotionGrant[]>
+> {
+  const res = await api.get('/api/user/recharge-promotion-grants/self')
   return res.data
 }
 

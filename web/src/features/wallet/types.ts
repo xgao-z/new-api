@@ -116,6 +116,32 @@ export interface WaffoPayMethod {
   payMethodName?: string
 }
 
+export interface RechargePromotionTier {
+  id: number
+  min_payment_amount: number
+  model_name: string
+  gift_amount: number
+  quota: number
+  expire_days: number
+}
+
+export interface RechargePromotionPreview {
+  id: number
+  name: string
+  priority: number
+  end_time: number
+  tiers: RechargePromotionTier[]
+}
+
+export interface RechargePromotionGrant {
+  id: number
+  model_name: string
+  total_quota: number
+  used_quota: number
+  status: 'active' | 'exhausted' | 'expired'
+  expires_at: number
+}
+
 /**
  * Topup configuration information
  */
@@ -156,6 +182,8 @@ export interface TopupInfo {
   payment_compliance_confirmed?: boolean
   /** Current compliance terms version */
   payment_compliance_terms_version?: string
+  /** Active recharge promotion campaigns and their public tiers */
+  recharge_promotions?: RechargePromotionPreview[]
 }
 
 /**

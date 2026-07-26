@@ -257,6 +257,16 @@ func SetApiRouter(router *gin.Engine) {
 			}
 		}
 
+		promotionRoute := apiRouter.Group("/recharge-promotion")
+		promotionRoute.Use(middleware.AdminAuth())
+		{
+			promotionRoute.GET("/", controller.ListRechargePromotions)
+			promotionRoute.POST("/", controller.CreateRechargePromotion)
+			promotionRoute.PUT("/:id", controller.UpdateRechargePromotion)
+			promotionRoute.DELETE("/:id", controller.DeleteRechargePromotion)
+		}
+		apiRouter.GET("/user/recharge-promotion-grants/self", middleware.UserAuth(), controller.GetSelfRechargePromotionGrants)
+
 		redemptionRoute := apiRouter.Group("/redemption")
 		redemptionRoute.Use(middleware.AdminAuth())
 		{
