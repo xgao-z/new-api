@@ -16,8 +16,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Clock3, Gift, ExternalLink, Loader2, Receipt, WalletCards } from 'lucide-react'
+import { useMemo, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -35,6 +35,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { formatNumber, formatQuota } from '@/lib/format'
+import { formatDate } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 import {
@@ -50,8 +51,155 @@ import type {
   TopupInfo,
   CreemProduct,
   WaffoPayMethod,
+  RechargePromotionPreview,
+  RechargePromotionTier,
 } from '../types'
 import { CreemProductsSection } from './creem-products-section'
+
+function getSortedPromotionTiers(tiers: RechargePromotionTier[]) {
+  return [...tiers].sort(
+    (left, right) => left.min_payment_amount - right.min_payment_amount
+  )
+}
+
+function RechargePromotionBanner(props: {
+  promotions: RechargePromotionPreview[]
+  topupAmount: number
+}) {
+  const { t } = useTranslation()
+
+  const cards = useMemo(() => {
+    return props.promotions
+      .map((promotion) => {
+        const tiers = getSortedPromotionTiers(promotion.tiers)
+        if (tiers.length === 0) return null
+
+        const matchedTier = [...tiers]
+          .reverse()
+          .find((tier) => props.topupAmount >= tier.min_payment_amount)
+        const nextTier = tiers.find(
+          (tier) => props.topupAmount < tier.min_payment_amount
+        )
+        const focusTier = matchedTier ?? nextTier ?? tiers[0]
+
+        return {
+          promotion,
+          tiers,
+          matchedTier,
+          nextTier,
+          focusTier,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+  }, [props.promotions, props.topupAmount])
+
+  if (cards.length === 0) {
+    return null
+  }
+
+  return (
+    <div className='space-y-2.5 sm:space-y-3'>
+      {cards.map(({ promotion, tiers, matchedTier, nextTier, focusTier }) => (
+        <div
+          key={promotion.id}
+          className='border-warning/30 from-warning/10 via-background to-background relative overflow-hidden rounded-xl border bg-gradient-to-br p-3 shadow-sm sm:p-4'
+        >
+          <div className='bg-warning/10 pointer-events-none absolute -top-8 -right-8 size-24 rounded-full blur-2xl' />
+          <div className='relative flex items-start gap-3'>
+            <IconBadge tone='warning' size='md'>
+              <Gift />
+            </IconBadge>
+            <div className='min-w-0 flex-1 space-y-2.5'>
+              <div className='flex flex-wrap items-center gap-2'>
+                <div className='text-sm font-semibold'>{promotion.name}</div>
+                <span className='bg-warning/15 text-warning rounded-full px-2 py-0.5 text-[11px] font-medium'>
+                  {t('Limited-time offer')}
+                </span>
+              </div>
+
+              {matchedTier ? (
+                <div className='space-y-1'>
+                  <div className='text-foreground text-sm font-medium'>
+                    {t('You will receive {{quota}} for {{model}}', {
+                      quota: formatQuota(matchedTier.quota),
+                      model: matchedTier.model_name,
+                    })}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>
+                    {t('Valid for {{days}} days', {
+                      days: matchedTier.expire_days,
+                    })}
+                  </div>
+                  {nextTier ? (
+                    <div className='text-muted-foreground text-xs'>
+                      {t(
+                        'Recharge {{amount}} to receive {{quota}} for {{model}}',
+                        {
+                          amount: nextTier.min_payment_amount,
+                          quota: formatQuota(nextTier.quota),
+                          model: nextTier.model_name,
+                        }
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className='space-y-1'>
+                  <div className='text-foreground text-sm font-medium'>
+                    {t(
+                      'Recharge {{amount}} to receive {{quota}} for {{model}}',
+                      {
+                        amount: focusTier.min_payment_amount,
+                        quota: formatQuota(focusTier.quota),
+                        model: focusTier.model_name,
+                      }
+                    )}
+                  </div>
+                  <div className='text-muted-foreground text-xs'>
+                    {t('Valid for {{days}} days', {
+                      days: focusTier.expire_days,
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className='flex flex-wrap gap-1.5'>
+                {tiers.map((tier) => {
+                  const isActive = matchedTier?.id === tier.id
+                  return (
+                    <span
+                      key={tier.id}
+                      className={cn(
+                        'rounded-md border px-2 py-1 text-[11px] font-medium tabular-nums',
+                        isActive
+                          ? 'border-warning/40 bg-warning/15 text-foreground'
+                          : 'border-border/70 bg-background/70 text-muted-foreground'
+                      )}
+                    >
+                      ≥{formatNumber(tier.min_payment_amount)} →{' '}
+                      {formatQuota(tier.quota)} · {tier.model_name}
+                    </span>
+                  )
+                })}
+              </div>
+
+              {promotion.end_time > 0 ? (
+                <div className='text-muted-foreground flex items-center gap-1.5 text-xs'>
+                  <Clock3 className='size-3.5' />
+                  <span>
+                    {t('Ends {{date}}', {
+                      date: formatDate(promotion.end_time),
+                    })}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 interface RechargeFormCardProps {
   topupInfo: TopupInfo | null
@@ -216,29 +364,11 @@ export function RechargeFormCard({
       }
       contentClassName='space-y-4 sm:space-y-6'
     >
-      {/* Online Topup Section */}
       {topupInfo?.recharge_promotions?.length ? (
-        <div className='border-y py-3'>
-          {topupInfo.recharge_promotions.map((promotion) => {
-            const tier = [...promotion.tiers]
-              .sort((left, right) => right.min_payment_amount - left.min_payment_amount)
-              .find((item) => topupAmount >= item.min_payment_amount)
-            if (!tier) return null
-            return (
-              <div key={promotion.id} className='text-muted-foreground text-xs'>
-                <span className='text-foreground font-medium'>{promotion.name}</span>
-                {' · '}
-                {t('Recharge {{amount}} to receive {{quota}} for {{model}}', {
-                  amount: tier.min_payment_amount,
-                  quota: formatQuota(tier.quota),
-                  model: tier.model_name,
-                })}
-                {' · '}
-                {t('Valid for {{days}} days', { days: tier.expire_days })}
-              </div>
-            )
-          })}
-        </div>
+        <RechargePromotionBanner
+          promotions={topupInfo.recharge_promotions}
+          topupAmount={topupAmount}
+        />
       ) : null}
       {hasAnyTopup ? (
         <div className='space-y-4 sm:space-y-6'>
