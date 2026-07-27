@@ -20,6 +20,7 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { AnnouncementPopup } from '@/components/announcement-popup'
 import { Dialog } from '@/components/dialog'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
@@ -443,6 +444,14 @@ export function PublicHeader(props: PublicHeaderProps) {
           })}
         </div>
       </Dialog>
+
+      {showNotifications ? (
+        <AnnouncementPopup
+          open={notifications.popupOpen}
+          onOpenChange={notifications.setPopupOpen}
+          announcements={notifications.unreadAnnouncements}
+        />
+      ) : null}
     </>
   )
 }

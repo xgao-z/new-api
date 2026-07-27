@@ -16,6 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { AnnouncementPopup } from '@/components/announcement-popup'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
@@ -145,6 +146,13 @@ export function AppHeader({
           </div>
         )}
       </Header>
+      {showNotifications ? (
+        <AnnouncementPopup
+          open={notifications.popupOpen}
+          onOpenChange={notifications.setPopupOpen}
+          announcements={notifications.unreadAnnouncements}
+        />
+      ) : null}
     </>
   )
 }

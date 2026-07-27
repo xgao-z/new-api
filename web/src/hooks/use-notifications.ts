@@ -17,11 +17,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
 import { useNotificationStore } from '@/stores/notification-store'
+
+export interface AnnouncementItem {
+  id?: number | string
+  type?: string
+  content?: string
+  extra?: string
+  publishDate?: string | Date
+  title?: string
+  link?: string
+}
 
 function hashString(input: string): string {
   let hash = 0
@@ -37,10 +47,10 @@ function hashString(input: string): string {
 }
 
 /**
- * Generate a unique key for an announcement
- * Prefer backend id, fall back to a content hash so edits register
+ * Generate a unique key for an announcement.
+ * Prefer backend id, fall back to a content hash so edits register.
  */
-function getAnnouncementKey(item: Record<string, unknown>): string {
+export function getAnnouncementKey(item: AnnouncementItem): string {
   if (!item) return ''
 
   if (item.id !== undefined && item.id !== null) {
@@ -48,22 +58,31 @@ function getAnnouncementKey(item: Record<string, unknown>): string {
   }
 
   const fingerprint = JSON.stringify({
-    publishDate: (item?.publishDate as string) || '',
-    content: ((item?.content as string) || '').trim(),
-    extra: ((item?.extra as string) || '').trim(),
-    type: (item?.type as string) || '',
-    title: ((item?.title as string) || '').trim(),
-    link: ((item?.link as string) || '').trim(),
+    publishDate: (item.publishDate as string) || '',
+    content: (item.content || '').trim(),
+    extra: (item.extra || '').trim(),
+    type: item.type || '',
+    title: (item.title || '').trim(),
+    link: (item.link || '').trim(),
   })
   return `hash:${hashString(fingerprint)}`
 }
 
+function isAnnouncementPublished(item: AnnouncementItem, now = Date.now()): boolean {
+  if (!item.publishDate) return true
+  const publishAt = new Date(item.publishDate).getTime()
+  if (Number.isNaN(publishAt)) return true
+  return publishAt <= now
+}
+
 /**
  * Hook to manage notifications (Notice + Announcements)
- * Provides unread counts and read status management
+ * Provides unread counts, read status management, and auto popup state.
  */
 export function useNotifications() {
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const [popupOpen, setPopupOpen] = useState(false)
+  const [hasAutoOpenedPopup, setHasAutoOpenedPopup] = useState(false)
   const [activeTab, setActiveTab] = useState<'notice' | 'announcements'>(
     'notice'
   )
@@ -82,10 +101,13 @@ export function useNotifications() {
   // Fetch Announcements from status
   const { status, loading: statusLoading } = useStatus()
   const announcementsEnabled = status?.announcements_enabled ?? false
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const announcements: Record<string, unknown>[] = announcementsEnabled
-    ? ((status?.announcements || []) as Record<string, unknown>[]).slice(0, 20)
-    : []
+  const announcements: AnnouncementItem[] = useMemo(() => {
+    if (!announcementsEnabled) return []
+    return ((status?.announcements || []) as AnnouncementItem[])
+      .filter((item) => Boolean((item.content || '').trim()))
+      .filter((item) => isAnnouncementPublished(item))
+      .slice(0, 20)
+  }, [announcementsEnabled, status?.announcements])
 
   // Notification store
   const {
@@ -100,33 +122,54 @@ export function useNotifications() {
     ? (noticeResponse.data || '').trim()
     : ''
 
+  const unreadAnnouncements = useMemo(
+    () =>
+      announcements.filter((item) => {
+        const key = getAnnouncementKey(item)
+        return key !== '' && !isAnnouncementRead(key)
+      }),
+    [announcements, isAnnouncementRead]
+  )
+
   // Calculate unread counts
   const unreadCounts = useMemo(() => {
     const noticeUnread =
       noticeContent && noticeContent !== lastReadNotice ? 1 : 0
 
-    const announcementsUnread = announcements.filter(
-      (item: Record<string, unknown>) => {
-        const key = getAnnouncementKey(item)
-        return !isAnnouncementRead(key)
-      }
-    ).length
-
     return {
       notice: noticeUnread,
-      announcements: announcementsUnread,
-      total: noticeUnread + announcementsUnread,
+      announcements: unreadAnnouncements.length,
+      total: noticeUnread + unreadAnnouncements.length,
     }
-  }, [noticeContent, lastReadNotice, announcements, isAnnouncementRead])
+  }, [noticeContent, lastReadNotice, unreadAnnouncements.length])
 
-  const markAnnouncementsAsRead = () => {
-    if (announcements.length > 0) {
-      const allKeys = announcements.map((item: Record<string, unknown>) =>
-        getAnnouncementKey(item)
-      )
-      markAnnouncementsRead(allKeys)
+  const markAnnouncementsAsRead = (items: AnnouncementItem[] = announcements) => {
+    if (items.length === 0) return
+    const keys = items
+      .map((item) => getAnnouncementKey(item))
+      .filter((key) => key !== '')
+    if (keys.length > 0) {
+      markAnnouncementsRead(keys)
     }
   }
+
+  // Auto-open unread announcement popup once per page load when data is ready.
+  useEffect(() => {
+    if (hasAutoOpenedPopup || noticeLoading || statusLoading || popoverOpen) {
+      return
+    }
+    if (unreadAnnouncements.length === 0) {
+      return
+    }
+    setPopupOpen(true)
+    setHasAutoOpenedPopup(true)
+  }, [
+    hasAutoOpenedPopup,
+    noticeLoading,
+    statusLoading,
+    popoverOpen,
+    unreadAnnouncements.length,
+  ])
 
   // Handle popover open
   const handleOpenPopover = (tab?: 'notice' | 'announcements') => {
@@ -142,6 +185,7 @@ export function useNotifications() {
 
     setActiveTab(nextTab)
     setPopoverOpen(true)
+    setPopupOpen(false)
   }
 
   const handlePopoverOpenChange = (open: boolean) => {
@@ -162,10 +206,24 @@ export function useNotifications() {
     }
   }
 
+  const dismissAnnouncementPopup = () => {
+    markAnnouncementsAsRead(unreadAnnouncements)
+    setPopupOpen(false)
+  }
+
+  const handlePopupOpenChange = (open: boolean) => {
+    if (open) {
+      setPopupOpen(true)
+      return
+    }
+    dismissAnnouncementPopup()
+  }
+
   return {
     // Data
     notice: noticeContent,
     announcements,
+    unreadAnnouncements,
     loading: noticeLoading || statusLoading,
 
     // Unread counts
@@ -178,6 +236,11 @@ export function useNotifications() {
     setPopoverOpen: handlePopoverOpenChange,
     activeTab,
     setActiveTab: handleTabChange,
+
+    // Popup state
+    popupOpen,
+    setPopupOpen: handlePopupOpenChange,
+    dismissAnnouncementPopup,
 
     // Actions
     openPopover: handleOpenPopover,
