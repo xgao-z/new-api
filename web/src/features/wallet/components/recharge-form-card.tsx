@@ -21,6 +21,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { IconBadge } from '@/components/ui/icon-badge'
@@ -40,7 +41,7 @@ import { cn } from '@/lib/utils'
 
 import {
   formatCurrency,
-  getDiscountLabel,
+  getDiscountPercentOff,
   getPaymentIcon,
   getMinTopupAmount,
   calculatePresetPricing,
@@ -62,13 +63,43 @@ function getSortedPromotionTiers(tiers: RechargePromotionTier[]) {
   )
 }
 
+/**
+ * Match recharge-promotion gift tier the same way as backend Snapshot:
+ * promotions are already ordered by priority desc, id desc; pick the first
+ * campaign that has a tier with min_payment_amount <= actual pay money, then
+ * take that campaign's highest eligible tier.
+ */
+function getMatchedRechargePromotionTier(
+  promotions: RechargePromotionPreview[] | undefined,
+  payMoney: number
+): RechargePromotionTier | null {
+  if (!promotions?.length || !Number.isFinite(payMoney) || payMoney <= 0) {
+    return null
+  }
+
+  for (const promotion of promotions) {
+    const tiers = getSortedPromotionTiers(promotion.tiers ?? [])
+    const matched = [...tiers]
+      .reverse()
+      .find((tier) => payMoney >= tier.min_payment_amount)
+    if (matched) {
+      return matched
+    }
+  }
+  return null
+}
+
 function RechargePromotionBanner(props: {
   promotions: RechargePromotionPreview[]
-  topupAmount: number
+  /** Actual pay money used for tier matching (backend TopUp.Money). */
+  payMoney: number
 }) {
   const { t } = useTranslation()
 
   const cards = useMemo(() => {
+    // Match against actual pay money (same unit as backend TopUp.Money /
+    // min_payment_amount), not the face-value top-up amount.
+    const payMoney = props.payMoney
     return props.promotions
       .map((promotion) => {
         const tiers = getSortedPromotionTiers(promotion.tiers)
@@ -76,9 +107,9 @@ function RechargePromotionBanner(props: {
 
         const matchedTier = [...tiers]
           .reverse()
-          .find((tier) => props.topupAmount >= tier.min_payment_amount)
+          .find((tier) => payMoney >= tier.min_payment_amount)
         const nextTier = tiers.find(
-          (tier) => props.topupAmount < tier.min_payment_amount
+          (tier) => payMoney < tier.min_payment_amount
         )
         const focusTier = matchedTier ?? nextTier ?? tiers[0]
 
@@ -91,7 +122,7 @@ function RechargePromotionBanner(props: {
         }
       })
       .filter((item): item is NonNullable<typeof item> => item !== null)
-  }, [props.promotions, props.topupAmount])
+  }, [props.promotions, props.payMoney])
 
   if (cards.length === 0) {
     return null
@@ -367,7 +398,11 @@ export function RechargeFormCard({
       {topupInfo?.recharge_promotions?.length ? (
         <RechargePromotionBanner
           promotions={topupInfo.recharge_promotions}
-          topupAmount={topupAmount}
+          payMoney={
+            Number.isFinite(paymentAmount) && paymentAmount > 0
+              ? paymentAmount
+              : 0
+          }
         />
       ) : null}
       {hasAnyTopup ? (
@@ -387,6 +422,7 @@ export function RechargeFormCard({
                         1.0
                       const {
                         displayValue,
+                        originalPrice,
                         actualPrice,
                         savedAmount,
                         hasDiscount,
@@ -396,37 +432,105 @@ export function RechargeFormCard({
                         discount,
                         usdExchangeRate
                       )
+                      const discountPercent = getDiscountPercentOff(discount)
+                      // Backend matches promotion tiers on actual pay money
+                      // (TopUp.Money), not the face-value top-up amount.
+                      const giftTier = getMatchedRechargePromotionTier(
+                        topupInfo?.recharge_promotions,
+                        actualPrice
+                      )
+                      const isSelected = selectedPreset === preset.value
+
+                      let presetCardClassName =
+                        'border-muted hover:border-muted-foreground/30'
+                      if (isSelected && hasDiscount) {
+                        presetCardClassName =
+                          'border-primary bg-primary/5 dark:border-primary dark:bg-primary/10'
+                      } else if (isSelected && giftTier) {
+                        presetCardClassName =
+                          'border-warning bg-warning/5 dark:border-warning dark:bg-warning/10'
+                      } else if (isSelected) {
+                        presetCardClassName =
+                          'border-foreground bg-foreground/5 dark:border-foreground dark:bg-foreground/10'
+                      } else if (hasDiscount) {
+                        presetCardClassName =
+                          'border-primary/30 hover:border-primary/50'
+                      } else if (giftTier) {
+                        presetCardClassName =
+                          'border-warning/30 hover:border-warning/50'
+                      }
+
                       return (
                         <Button
                           key={preset.value}
                           variant='outline'
                           className={cn(
-                            'flex min-h-16 flex-col items-start rounded-lg px-3 py-2.5 text-left whitespace-normal sm:min-h-[72px] sm:p-4',
-                            selectedPreset === preset.value
-                              ? 'border-foreground bg-foreground/5 dark:border-foreground dark:bg-foreground/10'
-                              : 'border-muted'
+                            'relative flex min-h-16 flex-col items-start gap-1.5 overflow-hidden rounded-lg px-3 py-2.5 text-left whitespace-normal sm:min-h-[76px] sm:p-4',
+                            presetCardClassName
                           )}
                           onClick={() => onSelectPreset(preset)}
                         >
-                          <div className='flex w-full items-center justify-between'>
+                          <div className='flex w-full items-start justify-between gap-2'>
                             <div className='text-base font-semibold sm:text-lg'>
                               {formatNumber(displayValue)}
                             </div>
-                            {hasDiscount && (
-                              <div className='text-xs font-medium text-green-600'>
-                                {getDiscountLabel(discount)}
-                              </div>
-                            )}
+                            {hasDiscount && discountPercent > 0 ? (
+                              <Badge
+                                variant='default'
+                                className='h-5 shrink-0 px-1.5 text-[10px] font-semibold tracking-wide uppercase sm:text-[11px]'
+                              >
+                                {t('{{percent}}% OFF', {
+                                  percent: discountPercent,
+                                })}
+                              </Badge>
+                            ) : null}
+                            {!hasDiscount && giftTier ? (
+                              <Badge
+                                variant='warning'
+                                className='h-5 shrink-0 px-1.5 text-[10px] font-semibold sm:text-[11px]'
+                              >
+                                {t('Gift')}
+                              </Badge>
+                            ) : null}
                           </div>
-                          <div className='text-muted-foreground mt-1.5 w-full text-xs sm:mt-2'>
-                            Pay {formatCurrency(actualPrice)}
-                            {hasDiscount && savedAmount > 0 && (
-                              <span className='text-green-600'>
-                                {' '}
-                                • Save {formatCurrency(savedAmount)}
+
+                          <div className='flex w-full flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-xs'>
+                            {hasDiscount ? (
+                              <>
+                                <span className='text-primary text-sm font-semibold tabular-nums'>
+                                  {formatCurrency(actualPrice)}
+                                </span>
+                                <span className='text-muted-foreground tabular-nums line-through'>
+                                  {formatCurrency(originalPrice)}
+                                </span>
+                                {savedAmount > 0 ? (
+                                  <span className='text-success tabular-nums'>
+                                    {t('Save {{amount}}', {
+                                      amount: formatCurrency(savedAmount),
+                                    })}
+                                  </span>
+                                ) : null}
+                              </>
+                            ) : (
+                              <span className='text-muted-foreground tabular-nums'>
+                                {t('Pay {{amount}}', {
+                                  amount: formatCurrency(actualPrice),
+                                })}
                               </span>
                             )}
                           </div>
+
+                          {giftTier ? (
+                            <div className='text-warning flex w-full items-center gap-1 text-[11px] font-medium'>
+                              <Gift className='size-3 shrink-0' />
+                              <span className='truncate'>
+                                {t('Gift {{quota}} · {{model}}', {
+                                  quota: formatQuota(giftTier.quota),
+                                  model: giftTier.model_name,
+                                })}
+                              </span>
+                            </div>
+                          ) : null}
                         </Button>
                       )
                     })}

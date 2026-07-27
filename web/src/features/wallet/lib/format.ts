@@ -62,13 +62,25 @@ export function formatCurrency(amount: number | string): string {
 }
 
 /**
- * Get discount label for display (e.g., "20% OFF")
+ * Get percent-off value for a pay-rate discount (e.g. 0.8 -> 20).
+ * Returns 0 when there is no discount.
+ */
+export function getDiscountPercentOff(discount: number): number {
+  if (discount >= DEFAULT_DISCOUNT_RATE) {
+    return 0
+  }
+  return Math.round((1 - discount) * 100)
+}
+
+/**
+ * Get discount label for display (e.g., "20% OFF").
+ * Prefer rendering via i18n at the call site when possible.
  */
 export function getDiscountLabel(discount: number): string {
-  if (discount >= DEFAULT_DISCOUNT_RATE) {
+  const off = getDiscountPercentOff(discount)
+  if (off <= 0) {
     return ''
   }
-  const off = Math.round((1 - discount) * 100)
   return `${off}% OFF`
 }
 
