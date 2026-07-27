@@ -123,6 +123,8 @@ func loginMethodFromContext(c *gin.Context) string {
 		return "passkey"
 	case "/api/oauth/wechat":
 		return "wechat"
+	case "/api/oauth/wechat/qrcode/login":
+		return "wechat"
 	case "/api/oauth/telegram/login":
 		return "telegram"
 	case "/api/oauth/:provider":

@@ -150,6 +150,11 @@ export type AuthSettings = {
   LinuxDOClientSecret: string
   LinuxDOMinimumTrustLevel: string
   WeChatAuthEnabled: boolean
+  WeChatAppID: string
+  WeChatAppSecret: string
+  WeChatToken: string
+  WeChatEncodingAESKey: string
+  WeChatReplyText: string
   WeChatServerAddress: string
   WeChatServerToken: string
   WeChatAccountQRCodeImageURL: string

@@ -109,6 +109,7 @@ export interface SystemStatus {
     telegram_bot_name?: string
     passkey_login?: boolean
     wechat_login?: boolean
+    wechat_auth_mode?: string
     wechat_qrcode?: string
     wechat_qr_code?: string
     wechat_qrcode_image_url?: string
@@ -153,6 +154,7 @@ export interface SystemStatus {
   telegram_bot_name?: string
   passkey_login?: boolean
   wechat_login?: boolean
+  wechat_auth_mode?: string
   wechat_qrcode?: string
   wechat_qr_code?: string
   wechat_qrcode_image_url?: string

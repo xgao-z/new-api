@@ -109,6 +109,13 @@ export function AccountBindingsTab({
     | CustomOAuthProviderInfo[]
     | undefined
 
+  let wechatAuthMode = ''
+  if (typeof status?.wechat_auth_mode === 'string') {
+    wechatAuthMode = status.wechat_auth_mode
+  } else if (typeof status?.data?.wechat_auth_mode === 'string') {
+    wechatAuthMode = status.data.wechat_auth_mode
+  }
+
   const fetchCustomBindings = useCallback(async () => {
     if (!customProviders || customProviders.length === 0) return
     try {
@@ -552,6 +559,7 @@ export function AccountBindingsTab({
         qrCodeUrl={
           typeof status?.wechat_qrcode === 'string' ? status.wechat_qrcode : ''
         }
+        authMode={wechatAuthMode}
         onOpenChange={(open) =>
           open ? dialogs.open('wechat') : dialogs.close('wechat')
         }

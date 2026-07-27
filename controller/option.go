@@ -194,10 +194,12 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	case "WeChatAuthEnabled":
-		if option.Value == "true" && common.WeChatServerAddress == "" {
+		if option.Value == "true" &&
+			common.WeChatServerAddress == "" &&
+			(common.WeChatAppID == "" || common.WeChatAppSecret == "" || common.WeChatToken == "") {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
-				"message": "无法启用微信登录，请先填入微信登录相关配置信息！",
+				"message": "无法启用微信登录，请先配置服务号 AppID/AppSecret/Token，或填入旧版微信验证码服务地址！",
 			})
 			return
 		}

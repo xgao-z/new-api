@@ -157,9 +157,74 @@ export async function createOAuthFlow(
   throw new Error(res.data?.message || 'Failed to initialize OAuth')
 }
 
-// WeChat login by authorization code
+// WeChat login by authorization code (legacy verification-code server)
 export async function wechatLoginByCode(code: string): Promise<ApiResponse> {
   const res = await api.get('/api/oauth/wechat', { params: { code } })
+  return res.data
+}
+
+export type WeChatQRIntent = 'login' | 'bind'
+
+export type WeChatQRSession = {
+  scene: string
+  intent: WeChatQRIntent | string
+  status: 'pending' | 'confirmed' | 'consumed' | 'expired' | string
+  qrcode_url?: string
+  expire_at: number
+  expires_in?: number
+  message?: string
+}
+
+export async function createWeChatQRCode(
+  intent: WeChatQRIntent = 'login'
+): Promise<ApiResponse<WeChatQRSession>> {
+  const res = await api.get('/api/oauth/wechat/qrcode', {
+    params: { intent },
+    disableDuplicate: true,
+    skipAuthRefresh: intent === 'login',
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  return res.data
+}
+
+export async function getWeChatQRStatus(
+  scene: string
+): Promise<ApiResponse<WeChatQRSession>> {
+  const res = await api.get('/api/oauth/wechat/qrcode/status', {
+    params: { scene },
+    disableDuplicate: true,
+    skipAuthRefresh: true,
+    skipBusinessError: true,
+    skipErrorHandler: true,
+  })
+  return res.data
+}
+
+export async function wechatQRLogin(scene: string): Promise<ApiResponse> {
+  const res = await api.post(
+    '/api/oauth/wechat/qrcode/login',
+    { scene },
+    {
+      disableDuplicate: true,
+      skipAuthRefresh: true,
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
+  return res.data
+}
+
+export async function wechatQRBind(scene: string): Promise<ApiResponse> {
+  const res = await api.post(
+    '/api/oauth/wechat/qrcode/bind',
+    { scene },
+    {
+      disableDuplicate: true,
+      skipBusinessError: true,
+      skipErrorHandler: true,
+    }
+  )
   return res.data
 }
 

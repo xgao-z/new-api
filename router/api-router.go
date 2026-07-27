@@ -48,6 +48,12 @@ func SetApiRouter(router *gin.Engine) {
 		// Non-standard OAuth (WeChat, Telegram) - keep original routes
 		apiRouter.GET("/oauth/wechat", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.WeChatAuth)
 		apiRouter.POST("/oauth/wechat/bind", middleware.UserAuth(), middleware.CriticalRateLimit(), controller.WeChatBind)
+		apiRouter.GET("/oauth/wechat/qrcode", middleware.CriticalRateLimit(), middleware.DisableCache(), middleware.TryUserAuth(), controller.WeChatQRCode)
+		apiRouter.GET("/oauth/wechat/qrcode/status", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.WeChatQRStatus)
+		apiRouter.POST("/oauth/wechat/qrcode/login", middleware.CriticalRateLimit(), middleware.DisableCache(), anonymousRequestBodyLimit, controller.WeChatQRLogin)
+		apiRouter.POST("/oauth/wechat/qrcode/bind", middleware.UserAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), controller.WeChatQRBind)
+		apiRouter.GET("/wechat/callback", middleware.DisableCache(), controller.WeChatServerCallback)
+		apiRouter.POST("/wechat/callback", middleware.DisableCache(), anonymousRequestBodyLimit, controller.WeChatServerCallback)
 		apiRouter.GET("/oauth/telegram/login", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.TelegramLogin)
 		apiRouter.POST("/oauth/telegram/bind/start", middleware.UserAuth(), middleware.CriticalRateLimit(), middleware.DisableCache(), controller.TelegramBindStart)
 		apiRouter.GET("/oauth/telegram/bind/:flow_token", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.TelegramBind)
