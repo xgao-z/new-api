@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link } from '@tanstack/react-router'
 import axios from 'axios'
-import { Loader2, LogIn, KeyRound } from 'lucide-react'
+import { Loader2, LogIn, KeyRound, LockKeyhole, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -280,7 +280,7 @@ export function UserAuthForm({
   const alternativeLoginMethods = (
     <>
       {passkeyLoginEnabled && (
-        <div className='mt-2 space-y-1'>
+        <div className='space-y-2'>
           <Button
             type='button'
             variant='outline'
@@ -303,7 +303,6 @@ export function UserAuthForm({
         </div>
       )}
 
-      {/* OAuth Providers */}
       <OAuthProviders
         status={status}
         redirectTo={redirectTo}
@@ -320,11 +319,21 @@ export function UserAuthForm({
         className={cn('grid gap-4', className)}
         {...props}
       >
-        {hasAlternativeLogin && alternativeLoginMethods}
+        {hasAlternativeLogin && (
+          <div className='space-y-4'>{alternativeLoginMethods}</div>
+        )}
 
         {passwordLoginEnabled && (
           <>
-            {/* Username Field */}
+            <div className='relative py-1' aria-hidden='true'>
+              <div className='border-border absolute inset-x-0 top-1/2 border-t' />
+              <span className='bg-background text-muted-foreground relative mx-auto block w-fit px-3 text-xs uppercase'>
+                {hasAlternativeLogin
+                  ? t('Or sign in with password')
+                  : t('Sign in with password')}
+              </span>
+            </div>
+
             <FormField
               control={form.control}
               name='username'
@@ -332,17 +341,23 @@ export function UserAuthForm({
                 <FormItem>
                   <FormLabel>{t('Username or Email')}</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder={t('Enter your username or email')}
-                      {...field}
-                    />
+                    <div className='relative'>
+                      <UserRound
+                        className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2'
+                        aria-hidden='true'
+                      />
+                      <Input
+                        className='h-11 ps-9'
+                        placeholder={t('Enter your username or email')}
+                        {...field}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Password Field */}
             <FormField
               control={form.control}
               name='password'
@@ -351,7 +366,11 @@ export function UserAuthForm({
                   <FormLabel>{t('Password')}</FormLabel>
                   <FormControl>
                     <PasswordInput
+                      className='h-11'
                       placeholder={t('Enter password')}
+                      startAdornment={
+                        <LockKeyhole className='size-4' aria-hidden='true' />
+                      }
                       {...field}
                     />
                   </FormControl>
@@ -366,19 +385,17 @@ export function UserAuthForm({
               )}
             />
 
-            {/* Submit Button */}
             <Button
               type='submit'
-              className='mt-2 w-full justify-center gap-2'
+              className='mt-1 h-11 w-full justify-center gap-2'
               disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
             >
               {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
               {t('Sign in')}
             </Button>
 
-            {/* Turnstile */}
             {isTurnstileEnabled && (
-              <div className='mt-2'>
+              <div className='pt-1'>
                 <Turnstile
                   siteKey={turnstileSiteKey}
                   onVerify={setTurnstileToken}

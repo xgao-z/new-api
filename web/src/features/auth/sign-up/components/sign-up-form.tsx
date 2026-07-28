@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
+import { AtSign, KeyRound, Loader2, LockKeyhole, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -226,7 +226,17 @@ export function SignUpForm({
             <FormItem>
               <FormLabel>{t('Username')}</FormLabel>
               <FormControl>
-                <Input placeholder={t('Enter your username')} {...field} />
+                <div className='relative'>
+                  <UserRound
+                    className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2'
+                    aria-hidden='true'
+                  />
+                  <Input
+                    className='h-11 ps-9'
+                    placeholder={t('Enter your username')}
+                    {...field}
+                  />
+                </div>
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -242,7 +252,11 @@ export function SignUpForm({
               <FormLabel>{t('Password')}</FormLabel>
               <FormControl>
                 <PasswordInput
+                  className='h-11'
                   placeholder={t('Enter password (8-20 characters)')}
+                  startAdornment={
+                    <LockKeyhole className='size-4' aria-hidden='true' />
+                  }
                   {...field}
                 />
               </FormControl>
@@ -259,7 +273,14 @@ export function SignUpForm({
             <FormItem>
               <FormLabel>{t('Confirm password')}</FormLabel>
               <FormControl>
-                <PasswordInput placeholder={t('Confirm password')} {...field} />
+                <PasswordInput
+                  className='h-11'
+                  placeholder={t('Confirm password')}
+                  startAdornment={
+                    <LockKeyhole className='size-4' aria-hidden='true' />
+                  }
+                  {...field}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -279,29 +300,44 @@ export function SignUpForm({
                     {t('Email (required for verification)')}
                   </FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder={t('name@example.com')}
-                      type='email'
-                      {...field}
-                    />
+                    <div className='relative'>
+                      <AtSign
+                        className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2'
+                        aria-hidden='true'
+                      />
+                      <Input
+                        className='h-11 ps-9'
+                        placeholder={t('name@example.com')}
+                        type='email'
+                        {...field}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Verification Code Field */}
-            <div className='flex items-end gap-2'>
-              <div className='flex-1'>
-                <Input
-                  placeholder={t('Verification code')}
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                />
+            <div className='grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end'>
+              <div className='space-y-2'>
+                <FormLabel>{t('Verification code')}</FormLabel>
+                <div className='relative'>
+                  <KeyRound
+                    className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2'
+                    aria-hidden='true'
+                  />
+                  <Input
+                    className='h-11 ps-9'
+                    placeholder={t('Verification code')}
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                  />
+                </div>
               </div>
               <Button
                 variant='outline'
                 type='button'
+                className='h-11 w-full sm:w-auto'
                 disabled={
                   isLoading ||
                   isSendingCode ||
@@ -317,9 +353,8 @@ export function SignUpForm({
           </>
         )}
 
-        {/* Turnstile */}
         {isTurnstileEnabled && (
-          <div className='mt-2'>
+          <div className='pt-1'>
             <Turnstile
               key={turnstileWidgetKey}
               siteKey={turnstileSiteKey}
@@ -338,7 +373,7 @@ export function SignUpForm({
         {/* Submit Button */}
         <Button
           type='submit'
-          className='mt-2 w-full justify-center gap-2'
+          className='mt-1 h-11 w-full justify-center gap-2'
           disabled={
             isLoading ||
             (requiresLegalConsent && !agreedToLegal) ||
@@ -354,7 +389,7 @@ export function SignUpForm({
             status={status}
             disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
             onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
-            className='pt-2'
+            className='pt-1'
           />
         )}
       </form>

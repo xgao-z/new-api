@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
+import { ArrowUpRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Skeleton } from '@/components/ui/skeleton'
@@ -27,37 +28,56 @@ type AuthLayoutProps = {
 }
 
 export function AuthLayout({ children }: AuthLayoutProps) {
-  const { t } = useTranslation()
   const { systemName, logo, loading } = useSystemConfig()
 
   return (
-    <div className='relative grid h-svh max-w-none'>
-      <Link
-        to='/'
-        className='absolute top-4 left-4 z-10 flex items-center gap-2 transition-opacity hover:opacity-80 sm:top-8 sm:left-8'
-      >
-        <div className='relative h-8 w-8'>
-          {loading ? (
-            <Skeleton className='absolute inset-0 rounded-full' />
-          ) : (
-            <img
-              src={logo}
-              alt={t('Logo')}
-              className='h-8 w-8 rounded-full object-cover'
-            />
-          )}
-        </div>
-        {loading ? (
-          <Skeleton className='h-6 w-24' />
-        ) : (
-          <h1 className='text-xl font-medium'>{systemName}</h1>
-        )}
-      </Link>
-      <div className='container flex items-center pt-16 sm:pt-0'>
-        <div className='mx-auto flex w-full flex-col justify-center space-y-2 px-4 py-8 sm:w-[480px] sm:p-8'>
-          {children}
-        </div>
-      </div>
+    <div className='bg-muted/30 min-h-svh max-w-none'>
+      <header className='absolute top-5 left-5 z-10 sm:top-8 sm:left-8'>
+        <BrandLink loading={loading} logo={logo} systemName={systemName} />
+      </header>
+      <main className='flex min-h-svh items-center justify-center overflow-y-auto px-5 py-24 sm:px-8'>
+        <div className='w-full max-w-md'>{children}</div>
+      </main>
     </div>
+  )
+}
+
+type BrandLinkProps = {
+  loading: boolean
+  logo: string
+  systemName: string
+}
+
+function BrandLink(props: BrandLinkProps) {
+  const { t } = useTranslation()
+
+  return (
+    <Link
+      to='/'
+      className='group focus-visible:ring-ring/50 flex w-fit items-center gap-3 rounded-lg outline-none focus-visible:ring-3'
+    >
+      <div className='relative size-9 shrink-0'>
+        {props.loading ? (
+          <Skeleton className='absolute inset-0 rounded-lg' />
+        ) : (
+          <img
+            src={props.logo}
+            alt={t('Logo')}
+            className='size-9 rounded-lg object-cover shadow-sm'
+          />
+        )}
+      </div>
+      {props.loading ? (
+        <Skeleton className='h-5 w-28' />
+      ) : (
+        <span className='flex items-center gap-1.5 text-lg font-semibold'>
+          {props.systemName}
+          <ArrowUpRight
+            className='text-muted-foreground size-3.5 opacity-0 transition-opacity group-hover:opacity-100'
+            aria-hidden='true'
+          />
+        </span>
+      )}
+    </Link>
   )
 }

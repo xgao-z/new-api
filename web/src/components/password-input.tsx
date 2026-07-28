@@ -29,22 +29,30 @@ type PasswordInputProps = Omit<
   'type'
 > & {
   ref?: React.Ref<HTMLInputElement>
+  startAdornment?: React.ReactNode
 }
 
 export function PasswordInput({
   className,
   disabled,
   ref,
+  startAdornment,
   ...props
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = React.useState(false)
 
   return (
-    <div className={cn('relative rounded-md', className)}>
+    <div className='relative'>
+      {startAdornment && (
+        <span className='text-muted-foreground pointer-events-none absolute top-1/2 left-3 z-10 flex size-4 -translate-y-1/2 items-center justify-center'>
+          {startAdornment}
+        </span>
+      )}
       <Input
         type={showPassword ? 'text' : 'password'}
         ref={ref}
         disabled={disabled}
+        className={cn(className, startAdornment && 'ps-9 pe-9')}
         {...props}
       />
       <Button
