@@ -164,7 +164,7 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
                     {...field}
                     maxLength={BACKUP_CODE_LENGTH}
                     autoComplete='off'
-                    className='font-mono uppercase'
+                    className='bg-background/60 h-11 rounded-xl font-mono uppercase'
                     onChange={(e) => {
                       const formatted = formatBackupCode(e.target.value)
                       field.onChange(formatted)
@@ -205,7 +205,7 @@ export function OtpForm({ className, ...props }: OtpFormProps) {
 
         <Button
           type='submit'
-          className='mt-2 w-full'
+          className='mt-1 h-11 w-full justify-center gap-2 rounded-xl'
           disabled={!isFormValid || isLoading}
         >
           {isLoading ? <Loader2 className='h-4 w-4 animate-spin' /> : null}

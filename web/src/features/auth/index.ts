@@ -109,6 +109,7 @@ export { useEmailVerification } from './hooks/use-email-verification'
 // ============================================================================
 
 export { AuthLayout } from './auth-layout'
+export { AuthPageHeader } from './components/auth-page-header'
 export { OAuthProviders } from './components/oauth-providers'
 export { TermsFooter } from './components/terms-footer'
 export { LegalConsent } from './components/legal-consent'

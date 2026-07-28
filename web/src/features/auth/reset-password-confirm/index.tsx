@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useNavigate } from '@tanstack/react-router'
-import { CheckIcon, CopyIcon } from 'lucide-react'
+import { CheckIcon, CopyIcon, LockKeyhole } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -31,6 +31,7 @@ import { api } from '@/lib/api'
 import { copyToClipboard } from '@/lib/copy-to-clipboard'
 
 import { AuthLayout } from '../auth-layout'
+import { AuthPageHeader } from '../components/auth-page-header'
 
 export type ResetPasswordSearchParams = {
   email?: string
@@ -105,19 +106,27 @@ export function ResetPasswordConfirm({
     }
   }
 
+  let actionLabel = t('auth.resetPasswordConfirm.confirm')
+  if (newPassword) {
+    actionLabel = t('auth.resetPasswordConfirm.backToLogin')
+  } else if (isActive) {
+    actionLabel = t('auth.resetPasswordConfirm.retry', {
+      seconds: secondsLeft,
+    })
+  }
+
   return (
     <AuthLayout>
-      <div className='w-full space-y-8'>
-        <div className='space-y-2'>
-          <h2 className='text-center text-2xl font-semibold tracking-tight sm:text-left'>
-            {t('Reset password')}
-          </h2>
-          <p className='text-muted-foreground text-left text-sm sm:text-base'>
-            {newPassword
+      <div className='w-full space-y-7'>
+        <AuthPageHeader
+          icon={LockKeyhole}
+          title={t('Reset password')}
+          description={
+            newPassword
               ? t('auth.resetPasswordConfirm.success')
-              : t('auth.resetPasswordConfirm.description')}
-          </p>
-        </div>
+              : t('auth.resetPasswordConfirm.description')
+          }
+        />
 
         <div className='space-y-4'>
           {!isValidResetLink && (
@@ -135,6 +144,7 @@ export function ResetPasswordConfirm({
               type='email'
               value={email || ''}
               disabled
+              className='bg-background/60 h-11 rounded-xl'
               placeholder={t('Waiting for email...')}
             />
           </div>
@@ -147,12 +157,13 @@ export function ResetPasswordConfirm({
                   id='password'
                   value={newPassword}
                   disabled
-                  className='font-mono'
+                  className='bg-background/60 h-11 rounded-xl font-mono'
                 />
                 <Button
                   type='button'
                   size='icon'
                   variant='outline'
+                  className='size-11 rounded-xl'
                   onClick={handleCopy}
                 >
                   {copied ? (
@@ -169,7 +180,7 @@ export function ResetPasswordConfirm({
           )}
 
           <Button
-            className='w-full'
+            className='h-11 w-full rounded-xl'
             onClick={
               newPassword
                 ? () => navigate({ to: '/sign-in', replace: true })
@@ -179,13 +190,7 @@ export function ResetPasswordConfirm({
               newPassword ? false : loading || isActive || !isValidResetLink
             }
           >
-            {newPassword
-              ? t('auth.resetPasswordConfirm.backToLogin')
-              : isActive
-                ? t('auth.resetPasswordConfirm.retry', {
-                    seconds: secondsLeft,
-                  })
-                : t('auth.resetPasswordConfirm.confirm')}
+            {actionLabel}
           </Button>
 
           {!newPassword && (

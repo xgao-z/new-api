@@ -218,7 +218,6 @@ export function SignUpForm({
         className={cn('grid gap-4', className)}
         {...props}
       >
-        {/* Username Field */}
         <FormField
           control={form.control}
           name='username'
@@ -232,8 +231,9 @@ export function SignUpForm({
                     aria-hidden='true'
                   />
                   <Input
-                    className='h-11 ps-9'
+                    className='bg-background/60 h-11 rounded-xl ps-9'
                     placeholder={t('Enter your username')}
+                    autoComplete='username'
                     {...field}
                   />
                 </div>
@@ -243,7 +243,6 @@ export function SignUpForm({
           )}
         />
 
-        {/* Password Field */}
         <FormField
           control={form.control}
           name='password'
@@ -252,8 +251,9 @@ export function SignUpForm({
               <FormLabel>{t('Password')}</FormLabel>
               <FormControl>
                 <PasswordInput
-                  className='h-11'
+                  className='bg-background/60 h-11 rounded-xl'
                   placeholder={t('Enter password (8-20 characters)')}
+                  autoComplete='new-password'
                   startAdornment={
                     <LockKeyhole className='size-4' aria-hidden='true' />
                   }
@@ -265,7 +265,6 @@ export function SignUpForm({
           )}
         />
 
-        {/* Confirm Password Field */}
         <FormField
           control={form.control}
           name='confirmPassword'
@@ -274,8 +273,9 @@ export function SignUpForm({
               <FormLabel>{t('Confirm password')}</FormLabel>
               <FormControl>
                 <PasswordInput
-                  className='h-11'
+                  className='bg-background/60 h-11 rounded-xl'
                   placeholder={t('Confirm password')}
+                  autoComplete='new-password'
                   startAdornment={
                     <LockKeyhole className='size-4' aria-hidden='true' />
                   }
@@ -287,10 +287,8 @@ export function SignUpForm({
           )}
         />
 
-        {/* Email Verification Section */}
         {emailVerificationRequired && (
           <>
-            {/* Email Field */}
             <FormField
               control={form.control}
               name='email'
@@ -306,9 +304,10 @@ export function SignUpForm({
                         aria-hidden='true'
                       />
                       <Input
-                        className='h-11 ps-9'
+                        className='bg-background/60 h-11 rounded-xl ps-9'
                         placeholder={t('name@example.com')}
                         type='email'
+                        autoComplete='email'
                         {...field}
                       />
                     </div>
@@ -327,8 +326,9 @@ export function SignUpForm({
                     aria-hidden='true'
                   />
                   <Input
-                    className='h-11 ps-9'
+                    className='bg-background/60 h-11 rounded-xl ps-9'
                     placeholder={t('Verification code')}
+                    autoComplete='one-time-code'
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value)}
                   />
@@ -337,7 +337,7 @@ export function SignUpForm({
               <Button
                 variant='outline'
                 type='button'
-                className='h-11 w-full sm:w-auto'
+                className='bg-background/60 h-11 w-full rounded-xl sm:min-w-28 sm:w-auto'
                 disabled={
                   isLoading ||
                   isSendingCode ||
@@ -370,10 +370,9 @@ export function SignUpForm({
           className='mt-1'
         />
 
-        {/* Submit Button */}
         <Button
           type='submit'
-          className='mt-1 h-11 w-full justify-center gap-2'
+          className='mt-1 h-11 w-full justify-center gap-2 rounded-xl'
           disabled={
             isLoading ||
             (requiresLegalConsent && !agreedToLegal) ||

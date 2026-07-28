@@ -92,28 +92,28 @@ export function OAuthCallbackScreen({
 
   return (
     <AuthLayout>
-      <div className='w-full space-y-8'>
+      <div className='w-full space-y-7'>
         <div className='flex flex-col items-center space-y-4 text-center'>
-          <div className='bg-muted flex h-16 w-16 items-center justify-center rounded-2xl'>
-            <Icon className='h-8 w-8' />
+          <div className='bg-primary/10 text-primary ring-primary/15 flex size-16 items-center justify-center rounded-2xl ring-1'>
+            <Icon className='size-8' aria-hidden='true' />
           </div>
-          <div className='space-y-2'>
-            <h2 className='text-center text-2xl font-semibold tracking-tight'>
-              {headline}
-            </h2>
-            <p className='text-muted-foreground text-sm sm:text-base'>
+          <div className='space-y-1.5'>
+            <h1 className='text-2xl font-semibold tracking-tight'>{headline}</h1>
+            <p className='text-muted-foreground text-sm leading-relaxed'>
               {description}
             </p>
           </div>
         </div>
 
-        <div className='space-y-4 text-center'>
-          <div className='flex items-center justify-center gap-2 text-sm font-medium'>
-            <Loader2 className='h-4 w-4 animate-spin' />
+        <div className='space-y-3 text-center'>
+          <div className='bg-muted/40 text-foreground/90 inline-flex items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium'>
+            <Loader2 className='size-4 animate-spin' aria-hidden='true' />
             <span>{t('Processing OAuth response...')}</span>
           </div>
-          <p className='text-muted-foreground text-sm'>{secondaryNote}</p>
-          <p className='text-muted-foreground text-xs'>
+          <p className='text-muted-foreground text-sm leading-relaxed'>
+            {secondaryNote}
+          </p>
+          <p className='text-muted-foreground text-xs leading-relaxed'>
             {t(
               'This may take a few moments while we validate the request and update your session.'
             )}

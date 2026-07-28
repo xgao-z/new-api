@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { useStatus } from '@/hooks/use-status'
 
 import { AuthLayout } from '../auth-layout'
+import { AuthPageHeader } from '../components/auth-page-header'
 import { TermsFooter } from '../components/terms-footer'
 import { UserAuthForm } from './components/user-auth-form'
 
@@ -31,19 +32,18 @@ export function SignIn() {
   const { redirect } = useSearch({ from: '/(auth)/sign-in' })
   const { status } = useStatus()
 
+  const canRegister =
+    !status?.self_use_mode_enabled && status?.register_enabled !== false
+
   return (
     <AuthLayout>
       <div className='w-full space-y-7'>
-        <div className='space-y-3'>
-          <div className='bg-primary/10 text-primary flex size-10 items-center justify-center rounded-lg'>
-            <LogIn className='size-5' aria-hidden='true' />
-          </div>
-          <h2 className='text-2xl font-semibold tracking-tight'>
-            {t('Sign in')}
-          </h2>
-          {!status?.self_use_mode_enabled &&
-            status?.register_enabled !== false && (
-              <p className='text-muted-foreground text-sm'>
+        <AuthPageHeader
+          icon={LogIn}
+          title={t('Sign in')}
+          description={
+            canRegister ? (
+              <>
                 {t("Don't have an account?")}{' '}
                 <Link
                   to='/sign-up'
@@ -51,10 +51,12 @@ export function SignIn() {
                 >
                   {t('Sign up')}
                 </Link>
-                .
-              </p>
-            )}
-        </div>
+              </>
+            ) : (
+              t('Welcome back. Sign in to continue.')
+            )
+          }
+        />
 
         <UserAuthForm redirectTo={redirect} />
 

@@ -40,6 +40,9 @@ type OAuthProvidersProps = {
   onWeChatLogin?: () => void
   isWeChatLoading?: boolean
   redirectTo?: string
+  /** When false, hide the top divider (useful when OAuth is the primary block). */
+  showDivider?: boolean
+  dividerLabel?: string
 }
 
 type ProviderButton = {
@@ -57,6 +60,8 @@ export function OAuthProviders({
   onWeChatLogin,
   isWeChatLoading = false,
   redirectTo,
+  showDivider = true,
+  dividerLabel,
 }: OAuthProvidersProps) {
   const { t } = useTranslation()
   const {
@@ -74,6 +79,7 @@ export function OAuthProviders({
     handleTelegramAuthorization,
     setIsTelegramDialogOpen,
   } = useOAuthLogin(status, redirectTo)
+  const resolvedDividerLabel = dividerLabel ?? t('Or continue with')
 
   const providerButtons: ProviderButton[] = []
 
@@ -149,18 +155,16 @@ export function OAuthProviders({
   return (
     <>
       <div className={cn('space-y-3', className)}>
-        <div className='relative'>
-          <div className='absolute inset-0 flex items-center'>
-            <span className='w-full border-t' />
-          </div>
-          <div className='relative flex justify-center text-xs uppercase'>
-            <span className='bg-background text-muted-foreground px-2'>
-              {t('Or continue with')}
+        {showDivider ? (
+          <div className='relative py-1' aria-hidden='true'>
+            <div className='border-border absolute inset-x-0 top-1/2 border-t' />
+            <span className='bg-card text-muted-foreground relative mx-auto block w-fit px-3 text-xs font-medium tracking-wide uppercase'>
+              {resolvedDividerLabel}
             </span>
           </div>
-        </div>
+        ) : null}
 
-        <div className='flex flex-col gap-2'>
+        <div className='flex flex-col gap-2.5'>
           {providerButtons.map(
             ({ key, label, onClick, icon, disabled: extraDisabled }) => (
               <Button
@@ -169,7 +173,7 @@ export function OAuthProviders({
                 type='button'
                 disabled={disabled || isLoading || extraDisabled}
                 onClick={onClick}
-                className='h-11 w-full justify-center gap-2 rounded-lg'
+                className='bg-background/60 hover:bg-accent/80 h-11 w-full justify-center gap-2 rounded-xl'
               >
                 {icon}
                 {label}

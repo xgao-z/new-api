@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { useStatus } from '@/hooks/use-status'
 
 import { AuthLayout } from '../auth-layout'
+import { AuthPageHeader } from '../components/auth-page-header'
 import { TermsFooter } from '../components/terms-footer'
 import { SignUpForm } from './components/sign-up-form'
 
@@ -33,24 +34,21 @@ export function SignUp() {
   return (
     <AuthLayout>
       <div className='w-full space-y-7'>
-        <div className='space-y-3'>
-          <div className='bg-primary/10 text-primary flex size-10 items-center justify-center rounded-lg'>
-            <UserRoundPlus className='size-5' aria-hidden='true' />
-          </div>
-          <h2 className='text-2xl font-semibold tracking-tight'>
-            {t('Create an account')}
-          </h2>
-          <p className='text-muted-foreground text-sm'>
-            {t('Already have an account?')}{' '}
-            <Link
-              to='/sign-in'
-              className='text-foreground hover:text-primary font-medium underline underline-offset-4'
-            >
-              {t('Sign in')}
-            </Link>
-            .
-          </p>
-        </div>
+        <AuthPageHeader
+          icon={UserRoundPlus}
+          title={t('Create an account')}
+          description={
+            <>
+              {t('Already have an account?')}{' '}
+              <Link
+                to='/sign-in'
+                className='text-foreground hover:text-primary font-medium underline underline-offset-4'
+              >
+                {t('Sign in')}
+              </Link>
+            </>
+          }
+        />
 
         <SignUpForm />
 

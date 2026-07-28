@@ -52,7 +52,7 @@ export function LegalConsent({
   return (
     <div
       className={cn(
-        'border-border/60 bg-muted/40 flex items-start gap-3 rounded-md border p-3',
+        'border-border/60 bg-muted/30 flex items-start gap-3 rounded-xl border p-3.5',
         className
       )}
     >
@@ -78,7 +78,7 @@ export function LegalConsent({
               {t('User Agreement')}
             </a>
           )}
-          {hasUserAgreement && hasPrivacyPolicy && ' and the '}
+          {hasUserAgreement && hasPrivacyPolicy && ` ${t('and the')} `}
           {hasPrivacyPolicy && (
             <a
               href='/privacy-policy'

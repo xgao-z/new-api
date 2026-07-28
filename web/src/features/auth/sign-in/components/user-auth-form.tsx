@@ -286,7 +286,7 @@ export function UserAuthForm({
             variant='outline'
             disabled={passkeyButtonDisabled}
             onClick={handlePasskeyLogin}
-            className='h-11 w-full justify-center gap-2 rounded-lg'
+            className='bg-background/60 hover:bg-accent/80 h-11 w-full justify-center gap-2 rounded-xl'
           >
             {isPasskeyLoading ? (
               <Loader2 className='h-4 w-4 animate-spin' />
@@ -308,6 +308,7 @@ export function UserAuthForm({
         redirectTo={redirectTo}
         disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
         onWeChatLogin={hasWeChatLogin ? handleOpenWeChatDialog : undefined}
+        showDivider={false}
       />
     </>
   )
@@ -320,19 +321,19 @@ export function UserAuthForm({
         {...props}
       >
         {hasAlternativeLogin && (
-          <div className='space-y-4'>{alternativeLoginMethods}</div>
+          <div className='space-y-3'>{alternativeLoginMethods}</div>
         )}
 
         {passwordLoginEnabled && (
           <>
-            <div className='relative py-1' aria-hidden='true'>
-              <div className='border-border absolute inset-x-0 top-1/2 border-t' />
-              <span className='bg-background text-muted-foreground relative mx-auto block w-fit px-3 text-xs uppercase'>
-                {hasAlternativeLogin
-                  ? t('Or sign in with password')
-                  : t('Sign in with password')}
-              </span>
-            </div>
+            {hasAlternativeLogin ? (
+              <div className='relative py-1' aria-hidden='true'>
+                <div className='border-border absolute inset-x-0 top-1/2 border-t' />
+                <span className='bg-card text-muted-foreground relative mx-auto block w-fit px-3 text-xs font-medium tracking-wide uppercase'>
+                  {t('Or sign in with password')}
+                </span>
+              </div>
+            ) : null}
 
             <FormField
               control={form.control}
@@ -347,8 +348,9 @@ export function UserAuthForm({
                         aria-hidden='true'
                       />
                       <Input
-                        className='h-11 ps-9'
+                        className='bg-background/60 h-11 rounded-xl ps-9'
                         placeholder={t('Enter your username or email')}
+                        autoComplete='username'
                         {...field}
                       />
                     </div>
@@ -366,8 +368,9 @@ export function UserAuthForm({
                   <FormLabel>{t('Password')}</FormLabel>
                   <FormControl>
                     <PasswordInput
-                      className='h-11'
+                      className='bg-background/60 h-11 rounded-xl'
                       placeholder={t('Enter password')}
+                      autoComplete='current-password'
                       startAdornment={
                         <LockKeyhole className='size-4' aria-hidden='true' />
                       }
@@ -377,7 +380,7 @@ export function UserAuthForm({
                   <FormMessage />
                   <Link
                     to='/forgot-password'
-                    className='text-muted-foreground absolute end-0 -top-0.5 z-10 text-sm font-medium hover:opacity-75'
+                    className='text-muted-foreground hover:text-foreground absolute end-0 -top-0.5 z-10 text-sm font-medium transition-colors'
                   >
                     {t('Forgot password?')}
                   </Link>
@@ -387,7 +390,7 @@ export function UserAuthForm({
 
             <Button
               type='submit'
-              className='mt-1 h-11 w-full justify-center gap-2'
+              className='mt-1 h-11 w-full justify-center gap-2 rounded-xl'
               disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
             >
               {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
