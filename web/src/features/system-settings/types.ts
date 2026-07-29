@@ -179,6 +179,8 @@ export type ContentSettings = {
   'console_setting.announcements_enabled': boolean
   'console_setting.faq_enabled': boolean
   'console_setting.uptime_kuma_enabled': boolean
+  'console_setting.customer_service_enabled': boolean
+  'console_setting.customer_service_qrcode': string
   DataExportEnabled: boolean
   DataExportDefaultTime: string
   DataExportInterval: number

@@ -33,6 +33,8 @@ const defaultContentSettings: ContentSettings = {
   'console_setting.announcements_enabled': true,
   'console_setting.faq_enabled': true,
   'console_setting.uptime_kuma_enabled': false,
+  'console_setting.customer_service_enabled': false,
+  'console_setting.customer_service_qrcode': '',
   DataExportEnabled: false,
   DataExportDefaultTime: 'hour',
   DataExportInterval: 5,

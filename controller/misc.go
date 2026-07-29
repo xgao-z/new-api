@@ -68,9 +68,9 @@ func GetStatus(c *gin.Context) {
 		"system_name":                 common.SystemName,
 		"logo":                        common.Logo,
 		"footer_html":                 common.Footer,
-"wechat_qrcode":               common.WeChatAccountQRCodeImageURL,
-			"wechat_login":                common.WeChatAuthEnabled,
-			"wechat_auth_mode":            service.WeChatAuthMode(),
+		"wechat_qrcode":               common.WeChatAccountQRCodeImageURL,
+		"wechat_login":                common.WeChatAuthEnabled,
+		"wechat_auth_mode":            service.WeChatAuthMode(),
 		"server_address":              system_setting.ServerAddress,
 		"turnstile_check":             common.TurnstileCheckEnabled,
 		"turnstile_site_key":          common.TurnstileSiteKey,
@@ -101,10 +101,12 @@ func GetStatus(c *gin.Context) {
 		"stripe_unit_price": setting.StripeUnitPrice,
 
 		// 面板启用开关
-		"api_info_enabled":      cs.ApiInfoEnabled,
-		"uptime_kuma_enabled":   cs.UptimeKumaEnabled,
-		"announcements_enabled": cs.AnnouncementsEnabled,
-		"faq_enabled":           cs.FAQEnabled,
+		"api_info_enabled":         cs.ApiInfoEnabled,
+		"uptime_kuma_enabled":      cs.UptimeKumaEnabled,
+		"announcements_enabled":    cs.AnnouncementsEnabled,
+		"faq_enabled":              cs.FAQEnabled,
+		"customer_service_enabled": cs.CustomerServiceEnabled,
+		"customer_service_qrcode":  cs.CustomerServiceQRCode,
 
 		// 模块管理配置
 		"HeaderNavModules":    common.OptionMap["HeaderNavModules"],

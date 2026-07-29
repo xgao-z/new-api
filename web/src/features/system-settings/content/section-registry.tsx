@@ -21,6 +21,7 @@ import { createSectionRegistry } from '../utils/section-registry'
 import { AnnouncementsSection } from './announcements-section'
 import { ApiInfoSection } from './api-info-section'
 import { ChatSettingsSection } from './chat-settings-section'
+import { CustomerServiceSection } from './customer-service-section'
 import { DashboardSection } from './dashboard-section'
 import { DrawingSettingsSection } from './drawing-settings-section'
 import { FAQSection } from './faq-section'
@@ -80,6 +81,16 @@ const CONTENT_SECTIONS = [
       <FAQSection
         enabled={settings['console_setting.faq_enabled']}
         data={settings['console_setting.faq']}
+      />
+    ),
+  },
+  {
+    id: 'customer-service',
+    titleKey: 'Customer Service',
+    build: (settings: ContentSettings) => (
+      <CustomerServiceSection
+        enabled={settings['console_setting.customer_service_enabled']}
+        qrcode={settings['console_setting.customer_service_qrcode']}
       />
     ),
   },
