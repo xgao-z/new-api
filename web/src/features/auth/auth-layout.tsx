@@ -17,13 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link } from '@tanstack/react-router'
-import {
-  Activity,
-  ArrowUpRight,
-  ChartNoAxesCombined,
-  Route,
-  ShieldCheck,
-} from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
+import { motion, useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 
 import { LanguageSwitcher } from '@/components/language-switcher'
@@ -57,7 +52,7 @@ export function AuthLayout(props: AuthLayoutProps) {
       </header>
 
       <main className='relative z-0 grid min-h-svh lg:grid-cols-[minmax(0,1.15fr)_minmax(26rem,0.85fr)]'>
-        <AuthOperationsPreview />
+        <AuthVisualPanel brandName={systemName || 'Confluia'} />
         <div className='lg:border-border flex min-w-0 items-center justify-center px-5 py-28 sm:px-8 lg:border-l lg:px-12'>
           <Card
             className={cn(
@@ -76,91 +71,239 @@ export function AuthLayout(props: AuthLayoutProps) {
   )
 }
 
-function AuthOperationsPreview() {
-  const { t } = useTranslation()
+type AuthVisualPanelProps = {
+  brandName: string
+}
 
-  const rows = [
-    {
-      icon: Route,
-      label: t('Request routing'),
-      value: t('Configured'),
-    },
-    {
-      icon: ShieldCheck,
-      label: t('Policy coverage'),
-      value: t('Active'),
-    },
-    {
-      icon: ChartNoAxesCombined,
-      label: t('Usage visibility'),
-      value: t('Ready'),
-    },
-  ]
+function AuthVisualPanel(props: AuthVisualPanelProps) {
+  const { t } = useTranslation()
+  const reduceMotion = useReducedMotion()
 
   return (
     <aside
-      className='border-border bg-muted/30 hidden min-w-0 px-12 pt-36 pb-12 lg:flex lg:flex-col xl:px-20'
-      aria-label={t('Workspace operations preview')}
+      className='relative hidden min-w-0 overflow-hidden lg:flex lg:flex-col'
+      aria-label={t('Confluia brand introduction')}
     >
-      <div className='my-auto max-w-xl'>
-        <p className='text-primary text-xs font-semibold tracking-[0.12em] uppercase'>
-          {t('AI operations workspace')}
-        </p>
-        <h2 className='mt-4 text-4xl leading-tight font-semibold tracking-normal text-balance'>
-          {t('Secure access to the controls behind every AI request')}
-        </h2>
-        <p className='text-muted-foreground mt-5 max-w-lg text-base leading-7'>
-          {t(
-            'Connect providers, manage access, and understand usage from one shared operating view.'
-          )}
-        </p>
+      <div
+        aria-hidden='true'
+        className='pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_70%_55%_at_30%_35%,color-mix(in_oklab,var(--primary)_22%,transparent),transparent_70%),radial-gradient(ellipse_55%_45%_at_75%_70%,color-mix(in_oklab,var(--primary)_14%,transparent),transparent_72%)]'
+      />
+      <div
+        aria-hidden='true'
+        className='pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,color-mix(in_oklab,var(--border)_55%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklab,var(--border)_55%,transparent)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_70%_60%_at_45%_45%,black_20%,transparent_85%)] bg-[size:2.5rem_2.5rem] opacity-40'
+      />
 
-        <div className='border-border bg-background mt-10 overflow-hidden border shadow-sm'>
-          <div className='border-border flex items-center justify-between border-b px-5 py-3'>
-            <span className='flex items-center gap-2 text-sm font-semibold'>
-              <Activity className='text-success size-4' aria-hidden='true' />
-              {t('Workspace activity')}
-            </span>
-            <span className='text-success font-mono text-xs'>200 OK</span>
-          </div>
-          <div className='border-border text-muted-foreground border-b px-5 py-4 font-mono text-xs leading-6'>
-            <span className='text-success'>POST</span>{' '}
-            <span className='text-foreground'>/v1/chat/completions</span>
-            <br />
-            <span>{t('Channel selection')}</span>{' '}
-            <span className='text-foreground'>primary-model-route</span>
-            <br />
-            <span>{t('Usage tracked')}</span>{' '}
-            <span className='text-foreground'>27 tokens</span>
-          </div>
-          <dl className='divide-border divide-y'>
-            {rows.map((row) => {
-              const Icon = row.icon
-              return (
-                <div
-                  key={row.label}
-                  className='flex items-center justify-between gap-4 px-5 py-3'
-                >
-                  <dt className='text-muted-foreground flex min-w-0 items-center gap-2 text-sm'>
-                    <Icon className='size-4 shrink-0' aria-hidden='true' />
-                    <span className='truncate'>{row.label}</span>
-                  </dt>
-                  <dd className='text-foreground shrink-0 text-xs font-semibold'>
-                    {row.value}
-                  </dd>
-                </div>
-              )
-            })}
-          </dl>
-        </div>
+      <div className='relative flex flex-1 flex-col items-center justify-center px-10 py-28 xl:px-16'>
+        <ConfluenceVisual reduceMotion={Boolean(reduceMotion)} />
 
-        <p className='border-primary text-muted-foreground mt-8 max-w-md border-l-2 pl-4 text-sm leading-6'>
-          {t(
-            'Your sign-in protects access to credentials, channels, and billing controls.'
-          )}
-        </p>
+        <motion.div
+          className='mt-10 max-w-md text-center'
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, delay: 0.15, ease: [0.33, 1, 0.68, 1] }}
+        >
+          <p className='text-3xl font-semibold tracking-tight xl:text-4xl'>
+            {props.brandName}
+          </p>
+          <p className='text-muted-foreground mt-3 text-sm tracking-[0.18em] uppercase'>
+            {t('Converge. Create. Control.')}
+          </p>
+        </motion.div>
       </div>
     </aside>
+  )
+}
+
+type ConfluenceVisualProps = {
+  reduceMotion: boolean
+}
+
+function ConfluenceVisual(props: ConfluenceVisualProps) {
+  const orbitDuration = props.reduceMotion ? 0 : 18
+  const flowDuration = props.reduceMotion ? 0 : 6
+
+  return (
+    <div
+      aria-hidden='true'
+      className='relative flex size-[min(28rem,52vw)] items-center justify-center'
+    >
+      {/* Soft ambient bloom */}
+      <div className='bg-primary/15 absolute size-[78%] rounded-full blur-3xl' />
+      <div className='bg-primary/10 absolute size-[58%] rounded-full blur-2xl' />
+
+      {/* Outer ring */}
+      <motion.div
+        className='border-border/60 absolute size-[92%] rounded-full border'
+        animate={
+          props.reduceMotion
+            ? undefined
+            : { rotate: 360, scale: [1, 1.015, 1] }
+        }
+        transition={
+          props.reduceMotion
+            ? undefined
+            : {
+                rotate: { duration: orbitDuration, ease: 'linear', repeat: Infinity },
+                scale: { duration: 8, ease: 'easeInOut', repeat: Infinity },
+              }
+        }
+      />
+
+      {/* Mid ring */}
+      <motion.div
+        className='border-primary/25 absolute size-[68%] rounded-full border border-dashed'
+        animate={props.reduceMotion ? undefined : { rotate: -360 }}
+        transition={
+          props.reduceMotion
+            ? undefined
+            : { duration: orbitDuration * 1.25, ease: 'linear', repeat: Infinity }
+        }
+      />
+
+      {/* Flowing confluence paths */}
+      <svg
+        viewBox='0 0 360 360'
+        className='absolute inset-[8%] size-[84%]'
+        fill='none'
+      >
+        <defs>
+          <linearGradient id='auth-flow-a' x1='0%' y1='0%' x2='100%' y2='100%'>
+            <stop offset='0%' stopColor='var(--primary)' stopOpacity='0' />
+            <stop offset='45%' stopColor='var(--primary)' stopOpacity='0.7' />
+            <stop offset='100%' stopColor='var(--primary)' stopOpacity='0' />
+          </linearGradient>
+          <linearGradient id='auth-flow-b' x1='100%' y1='0%' x2='0%' y2='100%'>
+            <stop offset='0%' stopColor='var(--primary)' stopOpacity='0' />
+            <stop offset='50%' stopColor='var(--primary)' stopOpacity='0.55' />
+            <stop offset='100%' stopColor='var(--primary)' stopOpacity='0' />
+          </linearGradient>
+          <linearGradient id='auth-flow-c' x1='50%' y1='100%' x2='50%' y2='0%'>
+            <stop offset='0%' stopColor='var(--primary)' stopOpacity='0' />
+            <stop offset='45%' stopColor='var(--primary)' stopOpacity='0.6' />
+            <stop offset='100%' stopColor='var(--primary)' stopOpacity='0' />
+          </linearGradient>
+        </defs>
+
+        <motion.path
+          d='M36 78 C 96 96, 126 150, 180 180 C 234 210, 264 246, 324 282'
+          stroke='url(#auth-flow-a)'
+          strokeWidth='1.6'
+          strokeLinecap='round'
+          initial={false}
+          animate={
+            props.reduceMotion
+              ? { pathLength: 1, opacity: 0.7 }
+              : { pathLength: [0.15, 1, 0.15], opacity: [0.25, 0.9, 0.25] }
+          }
+          transition={
+            props.reduceMotion
+              ? undefined
+              : { duration: flowDuration, ease: 'easeInOut', repeat: Infinity }
+          }
+        />
+        <motion.path
+          d='M318 72 C 258 102, 228 144, 180 180 C 132 216, 102 252, 42 288'
+          stroke='url(#auth-flow-b)'
+          strokeWidth='1.6'
+          strokeLinecap='round'
+          initial={false}
+          animate={
+            props.reduceMotion
+              ? { pathLength: 1, opacity: 0.65 }
+              : { pathLength: [0.2, 1, 0.2], opacity: [0.2, 0.85, 0.2] }
+          }
+          transition={
+            props.reduceMotion
+              ? undefined
+              : {
+                  duration: flowDuration + 1.2,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                  delay: 0.5,
+                }
+          }
+        />
+        <motion.path
+          d='M180 28 C 180 88, 180 132, 180 180 C 180 228, 180 272, 180 332'
+          stroke='url(#auth-flow-c)'
+          strokeWidth='1.4'
+          strokeLinecap='round'
+          initial={false}
+          animate={
+            props.reduceMotion
+              ? { pathLength: 1, opacity: 0.55 }
+              : { pathLength: [0.1, 1, 0.1], opacity: [0.15, 0.75, 0.15] }
+          }
+          transition={
+            props.reduceMotion
+              ? undefined
+              : {
+                  duration: flowDuration + 0.8,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                  delay: 0.9,
+                }
+          }
+        />
+      </svg>
+
+      {/* Orbiting nodes */}
+      {[
+        { top: '12%', left: '52%', size: 'size-2.5', delay: 0 },
+        { top: '28%', left: '18%', size: 'size-2', delay: 0.4 },
+        { top: '62%', left: '14%', size: 'size-2.5', delay: 0.8 },
+        { top: '78%', left: '48%', size: 'size-2', delay: 1.2 },
+        { top: '58%', left: '82%', size: 'size-2.5', delay: 1.6 },
+        { top: '24%', left: '78%', size: 'size-2', delay: 2 },
+      ].map((node) => (
+        <motion.span
+          key={`${node.top}-${node.left}`}
+          className={cn(
+            'bg-primary absolute rounded-full shadow-[0_0_18px_color-mix(in_oklab,var(--primary)_55%,transparent)]',
+            node.size
+          )}
+          style={{ top: node.top, left: node.left }}
+          animate={
+            props.reduceMotion
+              ? undefined
+              : { opacity: [0.35, 1, 0.35], scale: [0.85, 1.15, 0.85] }
+          }
+          transition={
+            props.reduceMotion
+              ? undefined
+              : {
+                  duration: 3.6,
+                  ease: 'easeInOut',
+                  repeat: Infinity,
+                  delay: node.delay,
+                }
+          }
+        />
+      ))}
+
+      {/* Core mark */}
+      <motion.div
+        className='border-border/70 bg-background/80 relative z-10 flex size-28 items-center justify-center rounded-full border shadow-[0_20px_60px_-28px_color-mix(in_oklab,var(--primary)_65%,transparent)] backdrop-blur-md'
+        animate={
+          props.reduceMotion
+            ? undefined
+            : { scale: [1, 1.04, 1], boxShadow: [
+                '0 20px 60px -28px color-mix(in oklab, var(--primary) 45%, transparent)',
+                '0 24px 70px -24px color-mix(in oklab, var(--primary) 70%, transparent)',
+                '0 20px 60px -28px color-mix(in oklab, var(--primary) 45%, transparent)',
+              ] }
+        }
+        transition={
+          props.reduceMotion
+            ? undefined
+            : { duration: 4.8, ease: 'easeInOut', repeat: Infinity }
+        }
+      >
+        <div className='bg-primary/12 absolute inset-3 rounded-full' />
+        <div className='bg-primary/20 absolute inset-7 rounded-full blur-md' />
+        <div className='from-primary via-primary/70 to-primary/30 relative size-10 rounded-full bg-linear-to-br shadow-[0_0_24px_color-mix(in_oklab,var(--primary)_50%,transparent)]' />
+      </motion.div>
+    </div>
   )
 }
 

@@ -60,24 +60,9 @@ await i18n.use(initReactI18next).init({
   resources: {
     en: {
       translation: {
-        Active: 'Active',
-        'AI operations workspace': 'AI operations workspace',
-        'Channel selection': 'Channel selection',
-        Configured: 'Configured',
-        'Connect providers, manage access, and understand usage from one shared operating view.':
-          'Connect providers, manage access, and understand usage from one shared operating view.',
+        'Confluia brand introduction': 'Confluia brand introduction',
+        'Converge. Create. Control.': 'Converge. Create. Control.',
         Logo: 'Logo',
-        Ready: 'Ready',
-        'Policy coverage': 'Policy coverage',
-        'Request routing': 'Request routing',
-        'Secure access to the controls behind every AI request':
-          'Secure access to the controls behind every AI request',
-        'Usage tracked': 'Usage tracked',
-        'Usage visibility': 'Usage visibility',
-        'Workspace activity': 'Workspace activity',
-        'Workspace operations preview': 'Workspace operations preview',
-        'Your sign-in protects access to credentials, channels, and billing controls.':
-          'Your sign-in protects access to credentials, channels, and billing controls.',
       },
     },
   },
@@ -95,7 +80,7 @@ after(() => {
 })
 
 describe('AuthLayout', () => {
-  test('keeps the form content primary and exposes operational context on desktop', async () => {
+  test('keeps the form content primary and exposes a visual brand panel on desktop', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -120,14 +105,13 @@ describe('AuthLayout', () => {
     assert.ok(container.querySelector('form[aria-label="Sign in form"]'))
     assert.equal(
       container.querySelector('aside')?.getAttribute('aria-label'),
-      'Workspace operations preview'
+      'Confluia brand introduction'
     )
     assert.equal(
-      container.textContent?.includes(
-        'Secure access to the controls behind every AI request'
-      ),
+      container.textContent?.includes('Converge. Create. Control.'),
       true
     )
+    assert.ok(container.querySelector('aside svg'))
     assert.ok(container.querySelector('main .lg\\:border-l'))
     assert.ok(container.querySelector('aside.hidden.lg\\:flex'))
 
