@@ -231,7 +231,7 @@ export function SignUpForm({
                     aria-hidden='true'
                   />
                   <Input
-                    className='bg-background/60 h-11 rounded-xl ps-9'
+                    className='border-border bg-background/70 focus-visible:border-primary/60 focus-visible:ring-primary/15 h-11 rounded-lg ps-9 shadow-none focus-visible:ring-3'
                     placeholder={t('Enter your username')}
                     autoComplete='username'
                     {...field}
@@ -251,7 +251,7 @@ export function SignUpForm({
               <FormLabel>{t('Password')}</FormLabel>
               <FormControl>
                 <PasswordInput
-                  className='bg-background/60 h-11 rounded-xl'
+                  className='border-border bg-background/70 focus-within:border-primary/60 focus-within:ring-primary/15 h-11 rounded-lg shadow-none focus-within:ring-3'
                   placeholder={t('Enter password (8-20 characters)')}
                   autoComplete='new-password'
                   startAdornment={
@@ -273,7 +273,7 @@ export function SignUpForm({
               <FormLabel>{t('Confirm password')}</FormLabel>
               <FormControl>
                 <PasswordInput
-                  className='bg-background/60 h-11 rounded-xl'
+                  className='border-border bg-background/70 focus-within:border-primary/60 focus-within:ring-primary/15 h-11 rounded-lg shadow-none focus-within:ring-3'
                   placeholder={t('Confirm password')}
                   autoComplete='new-password'
                   startAdornment={
@@ -304,7 +304,7 @@ export function SignUpForm({
                         aria-hidden='true'
                       />
                       <Input
-                        className='bg-background/60 h-11 rounded-xl ps-9'
+                        className='border-border bg-background/70 focus-visible:border-primary/60 focus-visible:ring-primary/15 h-11 rounded-lg ps-9 shadow-none focus-visible:ring-3'
                         placeholder={t('name@example.com')}
                         type='email'
                         autoComplete='email'
@@ -326,7 +326,7 @@ export function SignUpForm({
                     aria-hidden='true'
                   />
                   <Input
-                    className='bg-background/60 h-11 rounded-xl ps-9'
+                    className='border-border bg-background/70 focus-visible:border-primary/60 focus-visible:ring-primary/15 h-11 rounded-lg ps-9 shadow-none focus-visible:ring-3'
                     placeholder={t('Verification code')}
                     autoComplete='one-time-code'
                     value={verificationCode}
@@ -337,7 +337,7 @@ export function SignUpForm({
               <Button
                 variant='outline'
                 type='button'
-                className='bg-background/60 h-11 w-full rounded-xl sm:min-w-28 sm:w-auto'
+                className='border-border bg-background/70 h-11 w-full rounded-lg font-medium shadow-none sm:w-auto sm:min-w-28'
                 disabled={
                   isLoading ||
                   isSendingCode ||
@@ -372,7 +372,7 @@ export function SignUpForm({
 
         <Button
           type='submit'
-          className='mt-1 h-11 w-full justify-center gap-2 rounded-xl'
+          className='mt-2 h-11 w-full justify-center gap-2 rounded-lg font-medium'
           disabled={
             isLoading ||
             (requiresLegalConsent && !agreedToLegal) ||

@@ -32,14 +32,21 @@ export function AuthPageHeader(props: AuthPageHeaderProps) {
   const Icon = props.icon
 
   return (
-    <div className={cn('space-y-3', props.className)}>
-      <div className='bg-primary/10 text-primary ring-primary/15 flex size-11 items-center justify-center rounded-xl ring-1'>
-        <Icon className='size-5' aria-hidden='true' />
+    <div className={cn('space-y-4', props.className)}>
+      <div className='flex items-center gap-3'>
+        <div className='bg-primary/10 text-primary ring-primary/15 flex size-10 items-center justify-center rounded-lg ring-1'>
+          <Icon className='size-[1.125rem]' aria-hidden='true' />
+        </div>
+        <span className='text-muted-foreground text-xs font-semibold tracking-[0.12em] uppercase'>
+          {props.title}
+        </span>
       </div>
-      <div className='space-y-1.5'>
-        <h1 className='text-2xl font-semibold tracking-tight'>{props.title}</h1>
+      <div className='space-y-2'>
+        <h1 className='text-2xl leading-tight font-semibold tracking-normal'>
+          {props.title}
+        </h1>
         {props.description ? (
-          <div className='text-muted-foreground text-sm leading-relaxed'>
+          <div className='text-muted-foreground text-sm leading-6'>
             {props.description}
           </div>
         ) : null}

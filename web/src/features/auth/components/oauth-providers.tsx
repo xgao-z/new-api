@@ -158,7 +158,7 @@ export function OAuthProviders({
         {showDivider ? (
           <div className='relative py-1' aria-hidden='true'>
             <div className='border-border absolute inset-x-0 top-1/2 border-t' />
-            <span className='bg-card text-muted-foreground relative mx-auto block w-fit px-3 text-xs font-medium tracking-wide uppercase'>
+            <span className='bg-card text-muted-foreground relative mx-auto block w-fit px-3 text-[11px] font-semibold tracking-[0.1em] uppercase'>
               {resolvedDividerLabel}
             </span>
           </div>
@@ -173,7 +173,7 @@ export function OAuthProviders({
                 type='button'
                 disabled={disabled || isLoading || extraDisabled}
                 onClick={onClick}
-                className='bg-background/60 hover:bg-accent/80 h-11 w-full justify-center gap-2 rounded-xl'
+                className='border-border bg-background/70 hover:bg-muted/70 h-11 w-full justify-center gap-2 rounded-lg font-medium shadow-none'
               >
                 {icon}
                 {label}

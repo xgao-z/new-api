@@ -63,11 +63,13 @@ describe('AuthPageHeader', () => {
 
     await act(async () => {
       root.render(
-        <AuthPageHeader
-          icon={LogIn}
-          title='Sign in'
-          description={<span data-testid='desc'>Welcome back</span>}
-        /> as React.ReactElement
+        (
+          <AuthPageHeader
+            icon={LogIn}
+            title='Sign in'
+            description={<span data-testid='desc'>Welcome back</span>}
+          />
+        ) as React.ReactElement
       )
     })
 
@@ -79,7 +81,7 @@ describe('AuthPageHeader', () => {
     assert.ok(description)
     assert.equal(description?.textContent, 'Welcome back')
 
-    const iconWrapper = container.querySelector('.rounded-xl.ring-1')
+    const iconWrapper = container.querySelector('.rounded-lg.ring-1')
     assert.ok(iconWrapper)
 
     await act(async () => {
@@ -95,11 +97,16 @@ describe('AuthPageHeader', () => {
 
     await act(async () => {
       root.render(
-        <AuthPageHeader icon={LogIn} title='Create an account' /> as React.ReactElement
+        (
+          <AuthPageHeader icon={LogIn} title='Create an account' />
+        ) as React.ReactElement
       )
     })
 
-    assert.equal(container.querySelector('h1')?.textContent, 'Create an account')
+    assert.equal(
+      container.querySelector('h1')?.textContent,
+      'Create an account'
+    )
     assert.equal(container.querySelectorAll('p').length, 0)
 
     await act(async () => {

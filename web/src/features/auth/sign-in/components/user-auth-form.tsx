@@ -286,7 +286,7 @@ export function UserAuthForm({
             variant='outline'
             disabled={passkeyButtonDisabled}
             onClick={handlePasskeyLogin}
-            className='bg-background/60 hover:bg-accent/80 h-11 w-full justify-center gap-2 rounded-xl'
+            className='border-border bg-background/70 focus-within:border-primary/60 focus-within:ring-primary/15 h-11 w-full justify-center gap-2 rounded-lg focus-within:ring-3'
           >
             {isPasskeyLoading ? (
               <Loader2 className='h-4 w-4 animate-spin' />
@@ -329,7 +329,7 @@ export function UserAuthForm({
             {hasAlternativeLogin ? (
               <div className='relative py-1' aria-hidden='true'>
                 <div className='border-border absolute inset-x-0 top-1/2 border-t' />
-                <span className='bg-card text-muted-foreground relative mx-auto block w-fit px-3 text-xs font-medium tracking-wide uppercase'>
+                <span className='bg-card text-muted-foreground relative mx-auto block w-fit px-3 text-[11px] font-semibold tracking-[0.1em] uppercase'>
                   {t('Or sign in with password')}
                 </span>
               </div>
@@ -348,7 +348,7 @@ export function UserAuthForm({
                         aria-hidden='true'
                       />
                       <Input
-                        className='bg-background/60 h-11 rounded-xl ps-9'
+                        className='border-border bg-background/70 focus-visible:border-primary/60 focus-visible:ring-primary/15 h-11 rounded-lg ps-9 shadow-none focus-visible:ring-3'
                         placeholder={t('Enter your username or email')}
                         autoComplete='username'
                         {...field}
@@ -368,7 +368,7 @@ export function UserAuthForm({
                   <FormLabel>{t('Password')}</FormLabel>
                   <FormControl>
                     <PasswordInput
-                      className='bg-background/60 h-11 rounded-xl'
+                      className='border-border bg-background/70 focus-within:border-primary/60 focus-within:ring-primary/15 h-11 rounded-lg shadow-none focus-within:ring-3'
                       placeholder={t('Enter password')}
                       autoComplete='current-password'
                       startAdornment={
@@ -390,7 +390,7 @@ export function UserAuthForm({
 
             <Button
               type='submit'
-              className='mt-1 h-11 w-full justify-center gap-2 rounded-xl'
+              className='mt-2 h-11 w-full justify-center gap-2 rounded-lg font-medium'
               disabled={isLoading || (requiresLegalConsent && !agreedToLegal)}
             >
               {isLoading ? <Loader2 className='animate-spin' /> : <LogIn />}
