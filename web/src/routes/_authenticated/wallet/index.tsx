@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { z } from 'zod'
 
 import { Wallet } from '@/features/wallet'
@@ -32,5 +33,19 @@ export const Route = createFileRoute('/_authenticated/wallet/')({
 
 function RouteComponent() {
   const { show_history } = Route.useSearch()
-  return <Wallet initialShowHistory={show_history} />
+
+  useEffect(() => {
+    if (!show_history) return
+
+    const timer = window.setTimeout(() => {
+      document
+        .querySelector('#wallet-recharge-records')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.history.replaceState({}, '', window.location.pathname)
+    }, 100)
+
+    return () => window.clearTimeout(timer)
+  }, [show_history])
+
+  return <Wallet />
 }

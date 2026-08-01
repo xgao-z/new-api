@@ -27,12 +27,12 @@ import { getSelf } from '@/lib/api'
 import { getRechargePromotionGrants } from './api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
-import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
 import { PromotionQuotaCard } from './components/promotion-quota-card'
 import { TransferDialog } from './components/dialogs/transfer-dialog'
 import { RechargeFormCard } from './components/recharge-form-card'
+import { RechargeRecordsCard } from './components/recharge-records-card'
 import { SubscriptionPlansCard } from './components/subscription-plans-card'
 import { WalletStatsCard } from './components/wallet-stats-card'
 import { DEFAULT_DISCOUNT_RATE, PAYMENT_TYPES } from './constants'
@@ -59,11 +59,7 @@ import type {
   RechargePromotionGrant,
 } from './types'
 
-interface WalletProps {
-  initialShowHistory?: boolean
-}
-
-export function Wallet(props: WalletProps) {
+export function Wallet() {
   const { t } = useTranslation()
   const [user, setUser] = useState<UserWalletData | null>(null)
   const [promotionGrants, setPromotionGrants] = useState<
@@ -80,7 +76,6 @@ export function Wallet(props: WalletProps) {
   const [paymentLoading, setPaymentLoading] = useState<string | null>(null)
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
-  const [billingDialogOpen, setBillingDialogOpen] = useState(false)
   const [redemptionCode, setRedemptionCode] = useState('')
   const [creemDialogOpen, setCreemDialogOpen] = useState(false)
   const [selectedCreemProduct, setSelectedCreemProduct] =
@@ -139,13 +134,6 @@ export function Wallet(props: WalletProps) {
   useEffect(() => {
     fetchUser()
   }, [fetchUser])
-
-  useEffect(() => {
-    if (props.initialShowHistory) {
-      setBillingDialogOpen(true)
-      window.history.replaceState({}, '', window.location.pathname)
-    }
-  }, [props.initialShowHistory])
 
   // Initialize topup amount when topup info is loaded
   const topupAmountInitializedRef = useRef(false)
@@ -329,7 +317,6 @@ export function Wallet(props: WalletProps) {
                   loading={topupLoading}
                   priceRatio={(status?.price as number) || 1}
                   usdExchangeRate={effectiveUsdExchangeRate}
-                  onOpenBilling={() => setBillingDialogOpen(true)}
                   creemProducts={topupInfo?.creem_products}
                   enableCreemTopup={topupInfo?.enable_creem_topup}
                   onCreemProductSelect={handleCreemProductSelect}
@@ -349,6 +336,10 @@ export function Wallet(props: WalletProps) {
                 userQuota={user?.quota}
                 onPurchaseSuccess={fetchUser}
               />
+            </div>
+
+            <div id='wallet-recharge-records' className='scroll-mt-4'>
+              <RechargeRecordsCard />
             </div>
 
             <AffiliateRewardsCard
@@ -383,11 +374,6 @@ export function Wallet(props: WalletProps) {
         onConfirm={handleTransfer}
         availableQuota={user?.aff_quota ?? 0}
         transferring={transferring}
-      />
-
-      <BillingHistoryDialog
-        open={billingDialogOpen}
-        onOpenChange={setBillingDialogOpen}
       />
 
       <CreemConfirmDialog
