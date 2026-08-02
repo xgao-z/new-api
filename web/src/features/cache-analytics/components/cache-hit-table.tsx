@@ -30,9 +30,10 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatCompactNumber, formatNumber, formatPercent } from '@/lib/format'
+import { formatCompactNumber, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
+import { formatRate } from '../lib/format'
 import type { CacheHitStatItem } from '../types'
 
 const PAGE_SIZE = 10
@@ -206,7 +207,7 @@ export function CacheHitTable({ items, loading }: CacheHitTableProps) {
                     {formatNumber(item.hits)}
                   </td>
                   <td className='px-3 py-2.5 text-right font-medium tabular-nums sm:px-4'>
-                    {formatPercent(item.hit_rate)}
+                    {formatRate(item.hit_rate)}
                   </td>
                   <td className='px-3 py-2.5 text-right tabular-nums sm:px-4'>
                     {formatCompactNumber(item.cache_tokens)}
@@ -215,7 +216,7 @@ export function CacheHitTable({ items, loading }: CacheHitTableProps) {
                     {formatCompactNumber(item.prompt_tokens)}
                   </td>
                   <td className='px-3 py-2.5 text-right tabular-nums sm:px-4'>
-                    {formatPercent(item.token_cache_ratio)}
+                    {formatRate(item.token_cache_ratio)}
                   </td>
                   <td className='px-3 py-2.5 text-right tabular-nums sm:px-4'>
                     {formatCompactNumber(item.cache_write_tokens)}

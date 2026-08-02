@@ -25,11 +25,12 @@ import { IconBadge } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useThemeCustomization } from '@/context/theme-customization-provider'
 import { useTheme } from '@/context/theme-provider'
-import { formatNumber, formatPercent } from '@/lib/format'
+import { formatNumber } from '@/lib/format'
 import { formatChartTime, type TimeGranularity } from '@/lib/time'
 import { useThemeRadiusPx } from '@/lib/theme-radius'
 import { VCHART_OPTION } from '@/lib/vchart'
 
+import { formatRate } from '../lib/format'
 import type { CacheHitTrendPoint } from '../types'
 
 const REQUESTS_BAR_COLOR = '#5B8FF9'
@@ -161,7 +162,7 @@ export function CacheHitTrendChart({
             {
               key: hitRateLabel,
               value: (datum: Record<string, unknown>) =>
-                formatPercent(Number(datum?.hit_rate) || 0),
+                formatRate(Number(datum?.hit_rate) || 0),
             },
           ],
         },

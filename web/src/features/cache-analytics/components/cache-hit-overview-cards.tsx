@@ -21,9 +21,10 @@ import { useTranslation } from 'react-i18next'
 
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatCompactNumber, formatNumber, formatPercent } from '@/lib/format'
+import { formatCompactNumber, formatNumber } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
+import { formatRate } from '../lib/format'
 import type { CacheHitStatsSummary } from '../types'
 
 interface OverviewCardProps {
@@ -112,7 +113,7 @@ export function CacheHitOverviewCards({
     {
       id: 'hitRate',
       title: t('Request Hit Rate'),
-      value: formatPercent(s.hit_rate),
+      value: formatRate(s.hit_rate),
       description: t('Cache hits as a share of requests'),
       icon: Gauge,
       tone: 'chart-3' as IconBadgeTone,
@@ -128,7 +129,7 @@ export function CacheHitOverviewCards({
     {
       id: 'tokenRatio',
       title: t('Token Cache Ratio'),
-      value: formatPercent(s.token_cache_ratio),
+      value: formatRate(s.token_cache_ratio),
       description: t('Cached tokens as a share of prompt tokens'),
       icon: Percent,
       tone: 'chart-5' as IconBadgeTone,
