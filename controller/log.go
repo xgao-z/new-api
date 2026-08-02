@@ -122,6 +122,33 @@ func GetLogsStat(c *gin.Context) {
 	return
 }
 
+// maxCacheHitStatsSpan limits the admin cache-hit dashboard to 31 days, so the
+// per-row JSON aggregation over logs stays bounded.
+const maxCacheHitStatsSpan = 31 * 24 * 3600
+
+func GetCacheHitStats(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	if endTimestamp-startTimestamp > maxCacheHitStatsSpan {
+		common.ApiErrorMsg(c, "时间跨度不能超过 31 天")
+		return
+	}
+	channelId, _ := strconv.Atoi(c.Query("channel_id"))
+	modelName := c.Query("model_name")
+	stats, err := model.GetCacheHitStats(startTimestamp, endTimestamp, channelId, modelName)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    stats,
+	})
+}
+
 func GetLogsSelfStat(c *gin.Context) {
 	username := c.GetString("username")
 	logType, _ := strconv.Atoi(c.Query("type"))

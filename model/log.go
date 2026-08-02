@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -559,32 +560,9 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 
 	if channelIds.Len() > 0 {
-		var channels []struct {
-			Id   int    `gorm:"column:id"`
-			Name string `gorm:"column:name"`
-		}
-		if common.MemoryCacheEnabled {
-			// Cache get channel
-			for _, channelId := range channelIds.Items() {
-				if cacheChannel, err := CacheGetChannel(channelId); err == nil {
-					channels = append(channels, struct {
-						Id   int    `gorm:"column:id"`
-						Name string `gorm:"column:name"`
-					}{
-						Id:   channelId,
-						Name: cacheChannel.Name,
-					})
-				}
-			}
-		} else {
-			// Bulk query channels from DB
-			if err = DB.Table("channels").Select("id, name").Where("id IN ?", channelIds.Items()).Find(&channels).Error; err != nil {
-				return logs, total, err
-			}
-		}
-		channelMap := make(map[int]string, len(channels))
-		for _, channel := range channels {
-			channelMap[channel.Id] = channel.Name
+		channelMap, err := resolveChannelNames(channelIds.Items())
+		if err != nil {
+			return logs, total, err
 		}
 		for i := range logs {
 			logs[i].ChannelName = channelMap[logs[i].ChannelId]
@@ -592,6 +570,40 @@ func GetAllLogs(logType int, startTimestamp int64, endTimestamp int64, modelName
 	}
 
 	return logs, total, err
+}
+
+// resolveChannelNames maps channel ids to channel names, using the in-memory
+// channel cache when enabled and a bulk query otherwise. Deleted channels are
+// simply absent from the result map.
+func resolveChannelNames(channelIds []int) (map[int]string, error) {
+	var channels []struct {
+		Id   int    `gorm:"column:id"`
+		Name string `gorm:"column:name"`
+	}
+	if common.MemoryCacheEnabled {
+		// Cache get channel
+		for _, channelId := range channelIds {
+			if cacheChannel, err := CacheGetChannel(channelId); err == nil {
+				channels = append(channels, struct {
+					Id   int    `gorm:"column:id"`
+					Name string `gorm:"column:name"`
+				}{
+					Id:   channelId,
+					Name: cacheChannel.Name,
+				})
+			}
+		}
+	} else {
+		// Bulk query channels from DB
+		if err := DB.Table("channels").Select("id, name").Where("id IN ?", channelIds).Find(&channels).Error; err != nil {
+			return nil, err
+		}
+	}
+	channelMap := make(map[int]string, len(channels))
+	for _, channel := range channels {
+		channelMap[channel.Id] = channel.Name
+	}
+	return channelMap, nil
 }
 
 const logSearchCountLimit = 10000
@@ -704,6 +716,207 @@ func SumUsedQuota(logType int, startTimestamp int64, endTimestamp int64, modelNa
 	}
 
 	return stat, nil
+}
+
+// logOtherIntExpr returns a SQL expression that reads an integer field from the
+// log's other JSON column. Every writer of that column goes through
+// common.MapToJsonStr, so the value is either a valid JSON object or an empty
+// string; each dialect expression must tolerate both.
+func logOtherIntExpr(field string) string {
+	switch common.LogDatabaseType() {
+	case common.DatabaseTypePostgreSQL:
+		return fmt.Sprintf("COALESCE((NULLIF(other, '')::jsonb ->> '%s')::bigint, 0)", field)
+	case common.DatabaseTypeClickHouse:
+		return fmt.Sprintf("JSONExtractInt(other, '%s')", field)
+	case common.DatabaseTypeMySQL:
+		return fmt.Sprintf("COALESCE(CAST(JSON_EXTRACT(other, '$.%s') AS SIGNED), 0)", field)
+	default: // SQLite, whose json_extract raises on malformed JSON
+		return fmt.Sprintf("COALESCE(CAST(json_extract(CASE WHEN json_valid(other) THEN other END, '$.%s') AS INTEGER), 0)", field)
+	}
+}
+
+// logBucketExpr returns a SQL expression that floors created_at (unix seconds)
+// into buckets of the given width, in the log database's dialect.
+func logBucketExpr(bucketSeconds int64) string {
+	switch common.LogDatabaseType() {
+	case common.DatabaseTypeMySQL:
+		return fmt.Sprintf("FLOOR(created_at / %d) * %d", bucketSeconds, bucketSeconds)
+	case common.DatabaseTypeClickHouse:
+		return fmt.Sprintf("intDiv(created_at, %d) * %d", bucketSeconds, bucketSeconds)
+	default: // SQLite & PostgreSQL use integer division
+		return fmt.Sprintf("(created_at / %d) * %d", bucketSeconds, bucketSeconds)
+	}
+}
+
+// ratioOrZero returns part/total as a fraction in [0, 1], guarding against
+// empty totals.
+func ratioOrZero(part int64, total int64) float64 {
+	if total <= 0 {
+		return 0
+	}
+	return float64(part) / float64(total)
+}
+
+type CacheHitStatItem struct {
+	ChannelId        int     `json:"channel_id"`
+	ChannelName      string  `json:"channel_name"`
+	ModelName        string  `json:"model_name"`
+	Requests         int64   `json:"requests"`
+	Hits             int64   `json:"hits"`
+	HitRate          float64 `json:"hit_rate"`
+	CacheTokens      int64   `json:"cache_tokens"`
+	PromptTokens     int64   `json:"prompt_tokens"`
+	TokenCacheRatio  float64 `json:"token_cache_ratio"`
+	CacheWriteTokens int64   `json:"cache_write_tokens"`
+}
+
+type CacheHitTrendPoint struct {
+	Bucket       int64   `json:"bucket"`
+	Requests     int64   `json:"requests"`
+	Hits         int64   `json:"hits"`
+	HitRate      float64 `json:"hit_rate"`
+	CacheTokens  int64   `json:"cache_tokens"`
+	PromptTokens int64   `json:"prompt_tokens"`
+}
+
+type CacheHitStatsSummary struct {
+	Requests         int64   `json:"requests"`
+	Hits             int64   `json:"hits"`
+	HitRate          float64 `json:"hit_rate"`
+	CacheTokens      int64   `json:"cache_tokens"`
+	PromptTokens     int64   `json:"prompt_tokens"`
+	TokenCacheRatio  float64 `json:"token_cache_ratio"`
+	CacheWriteTokens int64   `json:"cache_write_tokens"`
+}
+
+type CacheHitStatsResult struct {
+	Items   []CacheHitStatItem   `json:"items"`
+	Trend   []CacheHitTrendPoint `json:"trend"`
+	Summary CacheHitStatsSummary `json:"summary"`
+}
+
+// GetCacheHitStats aggregates prompt-cache usage from consume logs within the
+// given time range, per channel and model, plus an hourly/daily trend. A
+// request counts as a cache hit when its other JSON records cache_tokens > 0.
+// Channel ids of deleted channels are omitted from the response's name lookup.
+func GetCacheHitStats(startTimestamp int64, endTimestamp int64, channelId int, modelName string) (*CacheHitStatsResult, error) {
+	cacheTokensExpr := logOtherIntExpr("cache_tokens")
+	cacheWriteTokensExpr := logOtherIntExpr("cache_write_tokens")
+	hitCondition := fmt.Sprintf("CASE WHEN %s > 0 THEN 1 ELSE 0 END", cacheTokensExpr)
+
+	applyFilters := func(tx *gorm.DB) *gorm.DB {
+		tx = tx.Where("type = ?", LogTypeConsume)
+		tx = tx.Where("created_at >= ?", startTimestamp).Where("created_at <= ?", endTimestamp)
+		if channelId != 0 {
+			tx = tx.Where("channel_id = ?", channelId)
+		}
+		if modelName != "" {
+			tx = tx.Where("model_name = ?", modelName)
+		}
+		return tx
+	}
+
+	var rows []struct {
+		ChannelId        int
+		ModelName        string
+		Requests         int64
+		Hits             int64
+		CacheTokens      int64
+		PromptTokens     int64
+		CacheWriteTokens int64
+	}
+	itemsSelect := fmt.Sprintf(
+		"channel_id, model_name, count(*) as requests, COALESCE(SUM(%s), 0) as hits, COALESCE(SUM(%s), 0) as cache_tokens, COALESCE(SUM(prompt_tokens), 0) as prompt_tokens, COALESCE(SUM(%s), 0) as cache_write_tokens",
+		hitCondition, cacheTokensExpr, cacheWriteTokensExpr)
+	if err := applyFilters(LOG_DB.Table("logs")).Select(itemsSelect).Group("channel_id, model_name").Scan(&rows).Error; err != nil {
+		common.SysError("failed to query cache hit stats: " + err.Error())
+		return nil, errors.New("查询缓存命中统计失败")
+	}
+
+	items := make([]CacheHitStatItem, 0, len(rows))
+	channelIds := types.NewSet[int]()
+	for _, row := range rows {
+		items = append(items, CacheHitStatItem{
+			ChannelId:        row.ChannelId,
+			ModelName:        row.ModelName,
+			Requests:         row.Requests,
+			Hits:             row.Hits,
+			HitRate:          ratioOrZero(row.Hits, row.Requests),
+			CacheTokens:      row.CacheTokens,
+			PromptTokens:     row.PromptTokens,
+			TokenCacheRatio:  ratioOrZero(row.CacheTokens, row.PromptTokens),
+			CacheWriteTokens: row.CacheWriteTokens,
+		})
+		if row.ChannelId != 0 {
+			channelIds.Add(row.ChannelId)
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Requests != items[j].Requests {
+			return items[i].Requests > items[j].Requests
+		}
+		if items[i].ChannelId != items[j].ChannelId {
+			return items[i].ChannelId < items[j].ChannelId
+		}
+		return items[i].ModelName < items[j].ModelName
+	})
+
+	if channelIds.Len() > 0 {
+		channelNames, err := resolveChannelNames(channelIds.Items())
+		if err != nil {
+			return nil, err
+		}
+		for i := range items {
+			items[i].ChannelName = channelNames[items[i].ChannelId]
+		}
+	}
+
+	// Trend buckets: hourly within 48h spans, daily otherwise.
+	bucketSeconds := int64(24 * 3600)
+	if endTimestamp-startTimestamp <= 48*3600 {
+		bucketSeconds = 3600
+	}
+	var trendRows []struct {
+		Bucket       int64
+		Requests     int64
+		Hits         int64
+		CacheTokens  int64
+		PromptTokens int64
+	}
+	trendSelect := fmt.Sprintf(
+		"%s as bucket, count(*) as requests, COALESCE(SUM(%s), 0) as hits, COALESCE(SUM(%s), 0) as cache_tokens, COALESCE(SUM(prompt_tokens), 0) as prompt_tokens",
+		logBucketExpr(bucketSeconds), hitCondition, cacheTokensExpr)
+	if err := applyFilters(LOG_DB.Table("logs")).Select(trendSelect).Group(logBucketExpr(bucketSeconds)).Scan(&trendRows).Error; err != nil {
+		common.SysError("failed to query cache hit trend: " + err.Error())
+		return nil, errors.New("查询缓存命中趋势失败")
+	}
+	sort.Slice(trendRows, func(i, j int) bool {
+		return trendRows[i].Bucket < trendRows[j].Bucket
+	})
+	trend := make([]CacheHitTrendPoint, 0, len(trendRows))
+	for _, row := range trendRows {
+		trend = append(trend, CacheHitTrendPoint{
+			Bucket:       row.Bucket,
+			Requests:     row.Requests,
+			Hits:         row.Hits,
+			HitRate:      ratioOrZero(row.Hits, row.Requests),
+			CacheTokens:  row.CacheTokens,
+			PromptTokens: row.PromptTokens,
+		})
+	}
+
+	summary := CacheHitStatsSummary{}
+	for _, item := range items {
+		summary.Requests += item.Requests
+		summary.Hits += item.Hits
+		summary.CacheTokens += item.CacheTokens
+		summary.PromptTokens += item.PromptTokens
+		summary.CacheWriteTokens += item.CacheWriteTokens
+	}
+	summary.HitRate = ratioOrZero(summary.Hits, summary.Requests)
+	summary.TokenCacheRatio = ratioOrZero(summary.CacheTokens, summary.PromptTokens)
+
+	return &CacheHitStatsResult{Items: items, Trend: trend, Summary: summary}, nil
 }
 
 func SumUsedToken(logType int, startTimestamp int64, endTimestamp int64, modelName string, username string, tokenName string) (token int) {

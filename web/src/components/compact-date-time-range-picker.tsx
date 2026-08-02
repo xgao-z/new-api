@@ -211,7 +211,7 @@ export function CompactDateTimeRangePicker({
               className='h-7 flex-1 px-2 text-xs'
               onClick={() => applyPreset('month')}
             >
-              {t('This month')}
+              {t('Month')}
             </Button>
           </div>
 
